@@ -1,0 +1,4 @@
+scenario,passenger_min_wait_saved,fleet_cost_increase,objective_improvement_pct,total_trips
+weekday_peak,,759000.0,,14778.0
+weekend,,746850.0,,14697.0
+rainy_day,,737400.0,,14634.0

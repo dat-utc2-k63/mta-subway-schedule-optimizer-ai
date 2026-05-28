@@ -1,0 +1,171 @@
+{
+  "n_slots": 1392,
+  "n_routes": 29,
+  "n_hours": 24,
+  "routes": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "6X",
+    "7",
+    "7X",
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "FS",
+    "FX",
+    "G",
+    "GS",
+    "H",
+    "J",
+    "L",
+    "M",
+    "N",
+    "Q",
+    "R",
+    "SI",
+    "W",
+    "Z"
+  ],
+  "opt_method": "Analytical",
+  "n_headway_fallback": 210,
+  "scenarios": [
+    "weekday_peak",
+    "weekend",
+    "rainy_day"
+  ],
+  "lambda_cost_default": 150.0,
+  "opt_target": "balanced",
+  "balanced_weights": {
+    "wait": 0.6,
+    "cost": 0.4
+  },
+  "lambda_candidates": [
+    60.0,
+    80.0,
+    100.0,
+    120.0,
+    150.0,
+    180.0,
+    220.0,
+    260.0
+  ],
+  "baseline": {
+    "weekday_peak": {
+      "total_passenger_min_wait": NaN,
+      "weighted_avg_wait_min": NaN,
+      "total_fleet_cost": 1457700.0,
+      "total_trips": 9718.0,
+      "headway_std": 7.472098021532313,
+      "objective": NaN,
+      "lambda_cost": 150.0
+    },
+    "weekend": {
+      "total_passenger_min_wait": NaN,
+      "weighted_avg_wait_min": NaN,
+      "total_fleet_cost": 1457700.0,
+      "total_trips": 9718.0,
+      "headway_std": 7.472098021532313,
+      "objective": NaN,
+      "lambda_cost": 150.0
+    },
+    "rainy_day": {
+      "total_passenger_min_wait": NaN,
+      "weighted_avg_wait_min": NaN,
+      "total_fleet_cost": 1457700.0,
+      "total_trips": 9718.0,
+      "headway_std": 7.472098021532313,
+      "objective": NaN,
+      "lambda_cost": 150.0
+    }
+  },
+  "optimized": {
+    "weekday_peak": {
+      "total_passenger_min_wait": NaN,
+      "weighted_avg_wait_min": NaN,
+      "total_fleet_cost": 2216700.0,
+      "total_trips": 14778.0,
+      "headway_std": 7.666950906702158,
+      "objective": NaN,
+      "lambda_cost": 150.0
+    },
+    "weekend": {
+      "total_passenger_min_wait": NaN,
+      "weighted_avg_wait_min": NaN,
+      "total_fleet_cost": 2204550.0,
+      "total_trips": 14697.0,
+      "headway_std": 7.766147543791465,
+      "objective": NaN,
+      "lambda_cost": 150.0
+    },
+    "rainy_day": {
+      "total_passenger_min_wait": NaN,
+      "weighted_avg_wait_min": NaN,
+      "total_fleet_cost": 2195100.0,
+      "total_trips": 14634.0,
+      "headway_std": 7.799395959403117,
+      "objective": NaN,
+      "lambda_cost": 150.0
+    }
+  },
+  "nn_eval": {
+    "holdout": {
+      "n_test": 65813,
+      "n_test_dates": 111,
+      "mae_nn": 643.3144211107624,
+      "mae_baseline": 932.374549680177,
+      "r2_nn": 0.9460950702925942,
+      "r2_baseline": 0.8859102886688187,
+      "mape_nn_pct": 15.183381508124057,
+      "mae_improvement_pct": 31.002576021467764
+    },
+    "cv": {
+      "n_folds": 5,
+      "mae_nn_mean": 586.7476264502699,
+      "mae_nn_std": 47.00567683001974,
+      "mae_baseline_mean": 759.595570581852,
+      "mae_baseline_std": 41.505732102400884,
+      "r2_nn_mean": 0.9618346972965996,
+      "r2_baseline_mean": 0.9338497670924303,
+      "mae_improvement_pct": 22.755259617849035
+    }
+  },
+  "lambda_sensitivity_weekday_peak": [
+    {
+      "lambda": 100,
+      "total_trips": 15008.0,
+      "total_passenger_min_wait": NaN,
+      "total_fleet_cost": 1500800.0,
+      "objective": NaN,
+      "baseline_objective": NaN,
+      "improvement_pct": NaN,
+      "elapsed_s": 0.00042557716369628906
+    },
+    {
+      "lambda": 150,
+      "total_trips": 14778.0,
+      "total_passenger_min_wait": NaN,
+      "total_fleet_cost": 2216700.0,
+      "objective": NaN,
+      "baseline_objective": NaN,
+      "improvement_pct": NaN,
+      "elapsed_s": 9.870529174804688e-05
+    },
+    {
+      "lambda": 200,
+      "total_trips": 14542.0,
+      "total_passenger_min_wait": NaN,
+      "total_fleet_cost": 2908400.0,
+      "objective": NaN,
+      "baseline_objective": NaN,
+      "improvement_pct": NaN,
+      "elapsed_s": 8.344650268554688e-05
+    }
+  ]
+}

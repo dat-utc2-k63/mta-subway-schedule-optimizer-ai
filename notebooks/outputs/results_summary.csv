@@ -1,0 +1,7 @@
+scenario,method,n_slots,total_passenger_min_wait,total_fleet_cost,weighted_avg_wait_min,headway_std,total_trips,objective,wait_saved_vs_baseline,fleet_cost_delta_vs_baseline,objective_improvement_pct,wait_improvement_pct
+weekday_peak,Baseline,1392,,1457700.0,,7.472098021532313,9718.0,,,0.0,,
+weekday_peak,Analytical,1392,,2216700.0,,7.666950906702158,14778.0,,,759000.0,,
+weekend,Baseline,1392,,1457700.0,,7.472098021532313,9718.0,,,0.0,,
+weekend,Analytical,1392,,2204550.0,,7.766147543791465,14697.0,,,746850.0,,
+rainy_day,Baseline,1392,,1457700.0,,7.472098021532313,9718.0,,,0.0,,
+rainy_day,Analytical,1392,,2195100.0,,7.799395959403117,14634.0,,,737400.0,,

@@ -1,0 +1,4 @@
+lambda,total_trips,total_passenger_min_wait,total_fleet_cost,objective,baseline_objective,improvement_pct,elapsed_s
+100,15008.0,,1500800.0,,,,0.00042557716369628906
+150,14778.0,,2216700.0,,,,9.870529174804688e-05
+200,14542.0,,2908400.0,,,,8.344650268554688e-05
