@@ -1,0 +1,274 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+%
+\documentclass[
+]{article}
+\usepackage{amsmath,amssymb}
+\usepackage{lmodern}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math}
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{xcolor}
+\usepackage{longtable,booktabs,array}
+\usepackage{calc} % for calculating minipage widths
+% Correct order of tables after \paragraph or \subparagraph
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
+\makeatother
+% Allow footnotes in longtable head/foot
+\IfFileExists{footnotehyper.sty}{\usepackage{footnotehyper}}{\usepackage{footnote}}
+\makesavenoteenv{longtable}
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+\ifLuaTeX
+  \usepackage{selnolig}  % disable illegal ligatures
+\fi
+\IfFileExists{bookmark.sty}{\usepackage{bookmark}}{\usepackage{hyperref}}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same} % disable monospaced font for URLs
+\hypersetup{
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+
+\author{}
+\date{}
+
+\begin{document}
+
+TRƯỜNG ĐẠI HỌC GIAO THÔNG VẬN TẢI \textbf{CỘNG HÒA XÃ HỘI CHỦ NGHIÃ VIỆT
+NAM}
+
+\textbf{PHÂN HIỆU TẠI THÀNH PHỐ HỒ CHÍ MINH} Độc lập -- Tự do -- Hạnh
+phúc
+
+\hypertarget{nhiux1ec7m-vux1ee5-thiux1ebft-kux1ebf-tux1ed1t-nghiux1ec7p}{%
+\section{\texorpdfstring{ NHIỆM VỤ THIẾT KẾ TỐT
+NGHIỆP}{ NHIỆM VỤ THIẾT KẾ TỐT NGHIỆP}}\label{nhiux1ec7m-vux1ee5-thiux1ebft-kux1ebf-tux1ed1t-nghiux1ec7p}}
+
+BỘ MÔN: \textbf{CÔNG NGHỆ THÔNG TIN}
+
+-\/-\/-\/-\/-\/-\/-***-\/-\/-\/-\/-\/-\/-
+
+\textbf{Mã sinh viên: 6351071006 Họ tên SV: Đinh Quốc Bảo}
+
+\textbf{Khóa:} 63 \textbf{Lớp:} CQ.63.CNTT
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\item
+  \textbf{Tên đề tài:} Xây dựng hệ thống nhận diện thực thể có tên trong
+  văn bản luật pháp tiếng Việt.
+\item
+  \textbf{Mục đích, yêu cầu}
+\end{enumerate}
+
+\begin{itemize}
+\item
+  Mục đích:
+\end{itemize}
+
+\begin{itemize}
+\item
+  Nghiên cứu và xây dựng một hệ thống nhận diện thực thể có tên cho văn
+  bản pháp luật tiếng Việt nhằm trích xuất thông tin pháp lý quan trọng
+  từ các bản án, các văn bản quy phạm pháp luật phục vụ cho việc tự động
+  phân loại hồ sơ bản án.
+\item
+  Xây dựng một bộ dữ liệu từ việc thu thập từ các văn bản pháp lý và
+  thực hiện gán nhãn thủ công theo chuẩn IOB.
+\item
+  So sánh mô hình hiệu năng của mô hình lựa chọn để fine-tune với mô
+  hình Baseline Spacy.
+\item
+  Phát triển một Website cho phép người dùng nhập văn bản pháp lý và các
+  thực thể có tên sẽ được tô màu để phân loại.
+\end{itemize}
+
+\begin{itemize}
+\item
+  Yêu cầu:
+\end{itemize}
+
+\begin{itemize}
+\item
+  Thu thập dữ liệu từ các trang liên quan đến pháp luật uy tín và gán
+  nhãn một cách thủ công cho toàn bộ dữ liệu.
+\item
+  Thực hiện fine-tune mô hình PhoBERT và tiến hành so sánh với mô hình
+  Baseline Spacy, từ đó đánh giá hiệu năng của mô hình dựa trên các độ
+  đo Precision, Recall và F1-Score.
+\item
+  Xây dựng Website trực quan và triển khai lên HuggingFace Spaces.
+\end{itemize}
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\setcounter{enumi}{2}
+\item
+  \textbf{Nội dung và phạm vi đề tài}
+\end{enumerate}
+
+\begin{itemize}
+\item
+  Nội dung đề tài:
+\end{itemize}
+
+\begin{itemize}
+\item
+  Nghiên cứu về bài toán NER trong văn bản pháp lý tiếng Việt, từ đó lựa
+  chọn hướng tiếp cận.
+\item
+  Thu thập dữ liệu từ các trang như Wikipedia, thư viện pháp luật, các
+  bài báo bản án công khai có uy tín.
+\item
+  Tiền xử lý văn bản pháp lý bằng cách làm sạch dữ liệu, chuẩn hóa, tách
+  từ, tách câu, lọc câu và lưu trữ dữ liệu thành định dạng JSON.
+\item
+  Gán nhãn thủ công cho 9 loại thực thể gồm có PER, ORG, LOC, DATETIME,
+  LAW\_ID, LAW\_TYPE, VIOLATION, PUNISHMENT và MONEY.
+\item
+  Huấn luyện mô hình Baseline Spacy và fine-tune mô hình PhoBERT, từ đó
+  đánh giá chi tiết và so sánh giữa hai mô hình.
+\item
+  Tối ưu hóa mô hình bằng cách tinh chỉnh các tham số, bổ sung thêm nhãn
+  dán, lưu lại model cho kết quả tốt nhất.
+\item
+  Xây dựng trang Web Demo gồm có một ô nhập văn bản, nút chọn phân tích
+  và hiển thị các văn bản đã được tô màu để nhận diện thực thể có tên.
+  Đồng thời triển khai lên Server HuggingFace Spaces cho phép truy cập
+  công khai.
+\end{itemize}
+
+\begin{itemize}
+\item
+  Phạm vi đề tài:
+\end{itemize}
+
+\begin{itemize}
+\item
+  Chỉ xử lý các văn bản pháp lý tiếng Việt, không xử lý các văn bản pháp
+  lý của ngôn ngữ khác.
+\item
+  Gán nhãn thủ công 9 loại thực thể cho 1500-2000 câu.
+\item
+  Chức năng nhận diện thực thể và hiển thị một cách cơ bản, chưa lưu trữ
+  vào cơ sở dữ liệu.
+\item
+  Phục vụ cho mục đích học thuật, chưa triển khai thực tế và độ bảo mật
+  chưa cao.
+\end{itemize}
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\setcounter{enumi}{3}
+\item
+  \textbf{Công nghệ, công cụ và ngôn ngữ lập trình}
+\end{enumerate}
+
+\begin{itemize}
+\item
+  Ngôn ngữ lập trình: Python, JavaScript, HTML, CSS, TypeScript, C\#
+\item
+  Môi trường phát triển: Visual Studio 2022, Jupyter Notebook,
+  GoogleColab
+\item
+  Quản lý mã nguồn: Git, GitHub
+\item
+  Thu thập dữ liệu: requests, BeautifulSoup4, wikipedia-api
+\item
+  Xử lý tiếng Việt: underthesea, unicode-data, re
+\item
+  Deep Learning Framework: PyTorch
+\item
+  Đánh giá mô hình: seqeval, scikit-learn, matplotlib, seaborn
+\item
+  Deploy: HuggingFace Spaces
+\end{itemize}
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\setcounter{enumi}{4}
+\item
+  \textbf{Các kết quả chính dự kiến sẽ đạt được và ứng dụng}
+\end{enumerate}
+
+\begin{itemize}
+\item
+  Bộ dữ liệu được gán nhãn chuẩn IOB cho 9 loại thực thể có tên.
+\item
+  Mô hình NER đã được huấn luyện tinh chỉnh cho ra kết quả tốt nhất.
+\item
+  Bảng so sánh các độ đo chi tiết.
+\item
+  Trang Web demo trực tuyến phục vụ cho việc trích xuất thông tin từ các
+  văn bản pháp lý.
+\end{itemize}
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\setcounter{enumi}{5}
+\item
+  \textbf{Giáo viên và cán bộ hướng dẫn}
+\end{enumerate}
+
+Họ tên: Trần Phong Nhã
+
+Đơn vị công tác: Bộ môn CNTT
+
+Điện thoại: Email:
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 2\tabcolsep) * \real{0.5311}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 2\tabcolsep) * \real{0.4689}}@{}}
+\toprule()
+\begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Ngày tháng năm 2026}
+
+\textbf{Trưởng BM Công nghệ Thông tin}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Đã giao nhiệm vụ TKTN}
+
+\textbf{Giáo viên hướng dẫn}
+\end{minipage} \\
+\midrule()
+\endhead
+\textbf{ThS. Trần Phong Nhã} & \textbf{ThS. Trần Phong Nhã} \\
+\bottomrule()
+\end{longtable}
+
+\begin{quote}
+Đã nhận nhiệm vụ TKTN
+
+Sinh viên: Đinh Quốc Bảo Ký tên:
+
+Điện thoại: 0336107518 Email: 6351071006@st.utc2.vn.edu
+\end{quote}
+
+\end{document}

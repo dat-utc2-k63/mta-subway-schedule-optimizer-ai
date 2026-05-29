@@ -1,0 +1,143 @@
+{
+  "n_slots": 48,
+  "n_routes": 1,
+  "n_hours": 24,
+  "routes": [
+    "1"
+  ],
+  "opt_method": "Analytical",
+  "n_headway_fallback": 0,
+  "scenarios": [
+    "weekday_peak",
+    "weekend",
+    "rainy_day"
+  ],
+  "lambda_cost_default": 150.0,
+  "opt_target": "balanced",
+  "balanced_weights": {
+    "wait": 0.6,
+    "cost": 0.4
+  },
+  "lambda_candidates": [
+    60.0,
+    80.0,
+    100.0,
+    120.0,
+    150.0,
+    180.0,
+    220.0,
+    260.0
+  ],
+  "baseline": {
+    "weekday_peak": {
+      "total_passenger_min_wait": 1679092.7202019957,
+      "weighted_avg_wait_min": 2.6460383940464847,
+      "total_fleet_cost": 69300.0,
+      "total_trips": 462.0,
+      "headway_std": 5.902140475526006,
+      "objective": 1748392.7202019957,
+      "lambda_cost": 150.0
+    },
+    "weekend": {
+      "total_passenger_min_wait": 1299190.6284954234,
+      "weighted_avg_wait_min": 2.9491985826786338,
+      "total_fleet_cost": 69300.0,
+      "total_trips": 462.0,
+      "headway_std": 5.902140475526006,
+      "objective": 1368490.6284954234,
+      "lambda_cost": 150.0
+    },
+    "rainy_day": {
+      "total_passenger_min_wait": 1420748.6366278932,
+      "weighted_avg_wait_min": 2.648997695373016,
+      "total_fleet_cost": 69300.0,
+      "total_trips": 462.0,
+      "headway_std": 5.902140475526006,
+      "objective": 1490048.6366278932,
+      "lambda_cost": 150.0
+    }
+  },
+  "optimized": {
+    "weekday_peak": {
+      "total_passenger_min_wait": 1079771.4717025328,
+      "weighted_avg_wait_min": 1.701583680606552,
+      "total_fleet_cost": 110100.0,
+      "total_trips": 734.0,
+      "headway_std": 1.733168304110658,
+      "objective": 1189871.4717025328,
+      "lambda_cost": 150.0
+    },
+    "weekend": {
+      "total_passenger_min_wait": 806176.617555006,
+      "weighted_avg_wait_min": 1.8300431712898968,
+      "total_fleet_cost": 110100.0,
+      "total_trips": 734.0,
+      "headway_std": 1.733168304110658,
+      "objective": 916276.617555006,
+      "lambda_cost": 150.0
+    },
+    "rainy_day": {
+      "total_passenger_min_wait": 913757.7435276823,
+      "weighted_avg_wait_min": 1.703708942124461,
+      "total_fleet_cost": 110100.0,
+      "total_trips": 734.0,
+      "headway_std": 1.733168304110658,
+      "objective": 1023857.7435276823,
+      "lambda_cost": 150.0
+    }
+  },
+  "nn_eval": {
+    "holdout": {
+      "n_test": 2663,
+      "n_test_dates": 111,
+      "mae_nn": 1340.2688539426485,
+      "mae_baseline": 1912.287505172036,
+      "r2_nn": 0.9276882825892125,
+      "r2_baseline": 0.8501290680644153,
+      "mape_nn_pct": 16.625003355144532,
+      "mae_improvement_pct": 29.912795522759357
+    },
+    "cv": {
+      "n_folds": 5,
+      "mae_nn_mean": 1217.098026888522,
+      "mae_nn_std": 105.6767122016627,
+      "mae_baseline_mean": 1583.378297872201,
+      "mae_baseline_std": 106.39127013114839,
+      "r2_nn_mean": 0.9462124758286885,
+      "r2_baseline_mean": 0.9069153896909613,
+      "mae_improvement_pct": 23.132833857575232
+    }
+  },
+  "lambda_sensitivity_weekday_peak": [
+    {
+      "lambda": 100,
+      "total_trips": 734.0,
+      "total_passenger_min_wait": 1079771.4717025328,
+      "total_fleet_cost": 73400.0,
+      "objective": 1153171.4717025328,
+      "baseline_objective": 1725292.7202019957,
+      "improvement_pct": 33.160822033288326,
+      "elapsed_s": 0.00025081634521484375
+    },
+    {
+      "lambda": 150,
+      "total_trips": 734.0,
+      "total_passenger_min_wait": 1079771.4717025328,
+      "total_fleet_cost": 110100.0,
+      "objective": 1189871.4717025328,
+      "baseline_objective": 1748392.7202019957,
+      "improvement_pct": 31.944839511510644,
+      "elapsed_s": 9.655952453613281e-05
+    },
+    {
+      "lambda": 200,
+      "total_trips": 734.0,
+      "total_passenger_min_wait": 1079771.4717025328,
+      "total_fleet_cost": 146800.0,
+      "objective": 1226571.4717025328,
+      "baseline_objective": 1771492.7202019957,
+      "improvement_pct": 30.760569450001906,
+      "elapsed_s": 8.702278137207031e-05
+    }
+  ]
+}
