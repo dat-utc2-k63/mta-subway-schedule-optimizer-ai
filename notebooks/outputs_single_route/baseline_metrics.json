@@ -13,6 +13,29 @@
     "rainy_day"
   ],
   "lambda_cost_default": 150.0,
+  "lambda_used": {
+    "weekday_peak": 1056.279534062382,
+    "weekend": 816.323817248184,
+    "rainy_day": 1063.0463706612572
+  },
+  "split_demand_by_direction": true,
+  "bound_status": {
+    "weekday_peak": {
+      "at_min_pct": 4.166666666666666,
+      "at_max_pct": 50.0,
+      "interior_pct": 45.833333333333336
+    },
+    "weekend": {
+      "at_min_pct": 0.0,
+      "at_max_pct": 50.0,
+      "interior_pct": 50.0
+    },
+    "rainy_day": {
+      "at_min_pct": 4.166666666666666,
+      "at_max_pct": 50.0,
+      "interior_pct": 45.833333333333336
+    }
+  },
   "opt_target": "balanced",
   "balanced_weights": {
     "wait": 0.6,
@@ -30,59 +53,59 @@
   ],
   "baseline": {
     "weekday_peak": {
-      "total_passenger_min_wait": 1679092.7202019957,
-      "weighted_avg_wait_min": 2.6460383940464847,
+      "total_passenger_min_wait": 836001.7479311859,
+      "weighted_avg_wait_min": 2.6082533817881943,
       "total_fleet_cost": 69300.0,
       "total_trips": 462.0,
       "headway_std": 5.902140475526006,
-      "objective": 1748392.7202019957,
+      "objective": 905301.7479311859,
       "lambda_cost": 150.0
     },
     "weekend": {
-      "total_passenger_min_wait": 1299190.6284954234,
-      "weighted_avg_wait_min": 2.9491985826786338,
+      "total_passenger_min_wait": 627468.8908921629,
+      "weighted_avg_wait_min": 2.834424654517313,
       "total_fleet_cost": 69300.0,
       "total_trips": 462.0,
       "headway_std": 5.902140475526006,
-      "objective": 1368490.6284954234,
+      "objective": 696768.8908921629,
       "lambda_cost": 150.0
     },
     "rainy_day": {
-      "total_passenger_min_wait": 1420748.6366278932,
-      "weighted_avg_wait_min": 2.648997695373016,
+      "total_passenger_min_wait": 842140.9692801349,
+      "weighted_avg_wait_min": 2.6060862610216713,
       "total_fleet_cost": 69300.0,
       "total_trips": 462.0,
       "headway_std": 5.902140475526006,
-      "objective": 1490048.6366278932,
+      "objective": 911440.9692801349,
       "lambda_cost": 150.0
     }
   },
   "optimized": {
     "weekday_peak": {
-      "total_passenger_min_wait": 1079771.4717025328,
-      "weighted_avg_wait_min": 1.701583680606552,
-      "total_fleet_cost": 110100.0,
-      "total_trips": 734.0,
-      "headway_std": 1.733168304110658,
-      "objective": 1189871.4717025328,
+      "total_passenger_min_wait": 683652.0643371688,
+      "weighted_avg_wait_min": 2.1329355030495423,
+      "total_fleet_cost": 83550.0,
+      "total_trips": 557.0,
+      "headway_std": 6.848759019901908,
+      "objective": 767202.0643371688,
       "lambda_cost": 150.0
     },
     "weekend": {
-      "total_passenger_min_wait": 806176.617555006,
-      "weighted_avg_wait_min": 1.8300431712898968,
-      "total_fleet_cost": 110100.0,
-      "total_trips": 734.0,
-      "headway_std": 1.733168304110658,
-      "objective": 916276.617555006,
+      "total_passenger_min_wait": 513225.14321483194,
+      "weighted_avg_wait_min": 2.3183587590740076,
+      "total_fleet_cost": 80250.0,
+      "total_trips": 535.0,
+      "headway_std": 4.480576370169375,
+      "objective": 593475.143214832,
       "lambda_cost": 150.0
     },
     "rainy_day": {
-      "total_passenger_min_wait": 913757.7435276823,
-      "weighted_avg_wait_min": 1.703708942124461,
-      "total_fleet_cost": 110100.0,
-      "total_trips": 734.0,
-      "headway_std": 1.733168304110658,
-      "objective": 1023857.7435276823,
+      "total_passenger_min_wait": 688679.2071673068,
+      "weighted_avg_wait_min": 2.1311840719305946,
+      "total_fleet_cost": 83550.0,
+      "total_trips": 557.0,
+      "headway_std": 6.848759019901908,
+      "objective": 772229.2071673068,
       "lambda_cost": 150.0
     }
   },
@@ -90,54 +113,97 @@
     "holdout": {
       "n_test": 2663,
       "n_test_dates": 111,
-      "mae_nn": 1340.2688539426485,
+      "mae_nn": 1122.1063303494097,
       "mae_baseline": 1912.287505172036,
-      "r2_nn": 0.9276882825892125,
+      "r2_nn": 0.9447690608261243,
       "r2_baseline": 0.8501290680644153,
-      "mape_nn_pct": 16.625003355144532,
-      "mae_improvement_pct": 29.912795522759357
+      "mape_nn_pct": 14.293210870294937,
+      "mae_improvement_pct": 41.32125387450768,
+      "resid_clip": 0.55
     },
     "cv": {
       "n_folds": 5,
-      "mae_nn_mean": 1217.098026888522,
-      "mae_nn_std": 105.6767122016627,
+      "mae_nn_mean": 999.1649187064795,
+      "mae_nn_std": 90.25333090353278,
       "mae_baseline_mean": 1583.378297872201,
       "mae_baseline_std": 106.39127013114839,
-      "r2_nn_mean": 0.9462124758286885,
+      "r2_nn_mean": 0.9607111806596068,
       "r2_baseline_mean": 0.9069153896909613,
-      "mae_improvement_pct": 23.132833857575232
+      "mae_improvement_pct": 36.89663929023202
     }
   },
   "lambda_sensitivity_weekday_peak": [
     {
-      "lambda": 100,
-      "total_trips": 734.0,
-      "total_passenger_min_wait": 1079771.4717025328,
-      "total_fleet_cost": 73400.0,
-      "objective": 1153171.4717025328,
-      "baseline_objective": 1725292.7202019957,
-      "improvement_pct": 33.160822033288326,
-      "elapsed_s": 0.00025081634521484375
+      "lambda_eval": 100,
+      "lambda_opt": 1056.2795340623807,
+      "total_trips": 557.0,
+      "total_passenger_min_wait": 683652.0643371688,
+      "total_fleet_cost": 55700.0,
+      "objective": 739352.0643371688,
+      "baseline_objective": 882201.7479311859,
+      "improvement_pct": 16.192405413955235,
+      "pct_at_trips_max": 50.0,
+      "elapsed_s": 0.0008635520935058594
     },
     {
-      "lambda": 150,
-      "total_trips": 734.0,
-      "total_passenger_min_wait": 1079771.4717025328,
-      "total_fleet_cost": 110100.0,
-      "objective": 1189871.4717025328,
-      "baseline_objective": 1748392.7202019957,
-      "improvement_pct": 31.944839511510644,
-      "elapsed_s": 9.655952453613281e-05
+      "lambda_eval": 150,
+      "lambda_opt": 1056.279534062382,
+      "total_trips": 557.0,
+      "total_passenger_min_wait": 683652.0643371688,
+      "total_fleet_cost": 83550.0,
+      "objective": 767202.0643371688,
+      "baseline_objective": 905301.7479311859,
+      "improvement_pct": 15.254547327408268,
+      "pct_at_trips_max": 50.0,
+      "elapsed_s": 0.0006842613220214844
     },
     {
-      "lambda": 200,
-      "total_trips": 734.0,
-      "total_passenger_min_wait": 1079771.4717025328,
-      "total_fleet_cost": 146800.0,
-      "objective": 1226571.4717025328,
-      "baseline_objective": 1771492.7202019957,
-      "improvement_pct": 30.760569450001906,
-      "elapsed_s": 8.702278137207031e-05
+      "lambda_eval": 200,
+      "lambda_opt": 1056.2795340623811,
+      "total_trips": 557.0,
+      "total_passenger_min_wait": 683652.0643371688,
+      "total_fleet_cost": 111400.0,
+      "objective": 795052.0643371688,
+      "baseline_objective": 928401.7479311859,
+      "improvement_pct": 14.36335981606759,
+      "pct_at_trips_max": 50.0,
+      "elapsed_s": 0.0007865428924560547
+    },
+    {
+      "lambda_eval": 400,
+      "lambda_opt": 1056.279534062385,
+      "total_trips": 557.0,
+      "total_passenger_min_wait": 683652.0643371688,
+      "total_fleet_cost": 222800.0,
+      "objective": 906452.0643371688,
+      "baseline_objective": 1020801.7479311859,
+      "improvement_pct": 11.201948255453573,
+      "pct_at_trips_max": 50.0,
+      "elapsed_s": 0.0006802082061767578
+    },
+    {
+      "lambda_eval": 600,
+      "lambda_opt": 1056.279534062382,
+      "total_trips": 557.0,
+      "total_passenger_min_wait": 683652.0643371688,
+      "total_fleet_cost": 334200.0,
+      "objective": 1017852.0643371688,
+      "baseline_objective": 1113201.7479311859,
+      "improvement_pct": 8.56535518123452,
+      "pct_at_trips_max": 50.0,
+      "elapsed_s": 0.0006706714630126953
+    },
+    {
+      "lambda_eval": 1000,
+      "lambda_opt": 1056.279534062382,
+      "total_trips": 557.0,
+      "total_passenger_min_wait": 683652.0643371688,
+      "total_fleet_cost": 557000.0,
+      "objective": 1240652.0643371688,
+      "baseline_objective": 1298001.7479311859,
+      "improvement_pct": 4.418305575121419,
+      "pct_at_trips_max": 50.0,
+      "elapsed_s": 0.0006663799285888672
     }
   ]
 }
