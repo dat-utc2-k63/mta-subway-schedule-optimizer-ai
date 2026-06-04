@@ -1,14 +1,12 @@
-# datasets — bo danh gia chi tiet
+# datasets — Winter 2023 → Fall 2025
 
-| File | Vai tro |
-|------|---------|
-| `ridership.csv` | Du lieu nhu cau theo gio |
-| `factors_hourly.csv` | Feature thoi tiet + lich theo gio |
-| `routes_by_station_complex.csv` | Lo trinh/tuyen theo station complex |
-| `routes.csv` | Data route (metadata route_id) |
-| `schedule_current/*.txt` | Lich trinh GTFS hien tai |
-| `train_manifest.json` | Khoa join (machine-readable) |
+| File | Range |
+|------|--------|
+| `ridership.csv` | **2023-12-01 → 2025-11-30** (~57.5M rows) |
+| `factors_hourly.csv` | **2023-12-01 → 2025-11-30** (17,543 hours) |
+| `factors_daily.csv` | **2023-12-01 → 2025-11-30** (731 days) |
+| `routes.csv`, `routes_by_station_complex.csv`, `schedule_current/` | unchanged |
 
-Ridership: co
+Join: `SUBSTR(ridership.transit_timestamp,1,19) = factors_hourly.timestamp`
 
-`python consolidate_datasets.py --years 2024 2025 --hardlink`
+Rebuild: `python trim_datasets_range.py`

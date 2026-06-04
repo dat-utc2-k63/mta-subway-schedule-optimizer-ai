@@ -1,0 +1,41 @@
+{
+  "paths": {
+    "data_dir": "..\\datasets",
+    "schedule_dir": "..\\datasets\\schedule_current",
+    "out_dir": "outputs\\default"
+  },
+  "run_experiment": "default",
+  "title": "blend (MLP + HistGBM)",
+  "DEMAND_MODEL_TYPE": "blend",
+  "USE_HISTGBM_BLEND": true,
+  "CV_USE_BLEND": true,
+  "CV_BLEND_TUNE_FRAC": 0.15,
+  "HOLDOUT_TEST_SEASON": "autumn",
+  "HOLDOUT_TEST_YEAR": 2025,
+  "HOLDOUT_VAL_SEASON": "summer",
+  "HOLDOUT_VAL_YEAR": 2025,
+  "OPT_TARGET": "balanced",
+  "BALANCED_WEIGHTS": {
+    "wait": 0.6,
+    "cost": 0.4
+  },
+  "LAMBDA_AUTO_CALIBRATE": true,
+  "LAMBDA_COST": 150.0,
+  "LAMBDA_CANDIDATES": [
+    60.0,
+    80.0,
+    100.0,
+    120.0,
+    150.0,
+    180.0,
+    220.0,
+    260.0
+  ],
+  "TARGET_MAX_BIND_FRACTION": 0.5,
+  "USE_ROUTE_EMBEDDING": true,
+  "USE_LAG_FEATURES": true,
+  "NN_EPOCHS_MAIN": 200,
+  "NN_EPOCHS_CV": 80,
+  "LSTM_SEQ_LEN": 7,
+  "TUNE_RESID_CLIP_ON_VAL": true
+}

@@ -1,32 +1,24 @@
 {
   "purpose": "MTA subway detailed evaluation bundle",
+  "date_range": {
+    "requested": "2023-12-01 -> 2025-11-30",
+    "ridership_actual": "2023-12-01 -> 2025-11-30",
+    "factors_actual": "2023-12-01 -> 2025-11-30"
+  },
   "join_keys": {
-    "ridership": [
-      "transit_timestamp",
-      "station_complex_id",
-      "transit_mode"
-    ],
-    "factors_hourly": [
-      "timestamp"
-    ],
-    "routes_by_station_complex": [
-      "station_complex_id",
-      "route_ids_gtfs"
-    ],
-    "routes": [
-      "route_id"
-    ],
-    "schedule_current": [
-      "trip_id",
-      "stop_id",
-      "route_id",
-      "service_id"
-    ]
+    "ridership": ["transit_timestamp", "station_complex_id", "transit_mode"],
+    "factors_hourly": ["timestamp"],
+    "routes_by_station_complex": ["station_complex_id", "route_ids_gtfs"],
+    "routes": ["route_id"],
+    "schedule_current": ["trip_id", "stop_id", "route_id", "service_id"]
   },
   "merge_hints": [
     "SUBSTR(ridership.transit_timestamp,1,19) = factors_hourly.timestamp",
-    "ridership.station_complex_id = routes_by_station_complex.station_complex_id",
-    "route_ids_gtfs split token -> routes.route_id",
-    "routes.route_id = schedule_current/trips.route_id"
-  ]
+    "ridership.station_complex_id = routes_by_station_complex.station_complex_id"
+  ],
+  "row_counts": {
+    "ridership": 57480294,
+    "factors_hourly": 17543,
+    "factors_daily": 731
+  }
 }
