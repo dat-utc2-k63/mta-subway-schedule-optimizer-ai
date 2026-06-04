@@ -1,31 +1,36 @@
 # Notebooks MTA schedule optimization
 
-## Cấu trúc
+## Kaggle (mặc định trong notebook)
 
-```
-notebooks/
-  mta_schedule_optimization.ipynb           # 29 tuyến
-  mta_schedule_optimization_single_route.ipynb
-  lib/single_route_pipeline.py
-  outputs/                                  # kết quả (tùy OUT_DIR trong Setup)
-```
-
-## Setup — 3 đường dẫn
-
-Trong notebook, sửa:
+| Biến | Path |
+|------|------|
+| `LIB_DIR` | `/kaggle/input/datasets/tnguynthnh142/libmta` → `single_route_pipeline.py` |
+| `DATA_DIR` | `/kaggle/input/datasets/tnguynthnh142/mta-subway-ny` |
+| `SCHEDULE_DIR` | `/kaggle/input/datasets/tnguynthnh142/schedule-subway` |
+| `OUT_DIR` | `/kaggle/working/<RUN_EXPERIMENT>/` |
 
 ```python
+RUN_EXPERIMENT = "default"  # default | model_mlp | model_lstm
+srp.apply_experiment(RUN_EXPERIMENT, globals())
+```
+
+## Local (repo)
+
+```python
+LIB_DIR = Path("lib")  # hoặc notebooks/lib khi chạy từ notebooks/
 DATA_DIR = Path("../datasets")
 SCHEDULE_DIR = Path("../datasets/schedule_current")
-OUT_DIR = Path("outputs/default")
+OUT_DIR = Path("outputs") / RUN_EXPERIMENT
+sys.path.insert(0, str(Path(".").resolve()))
+import lib.single_route_pipeline as srp
 ```
 
-Ví dụ Kaggle:
+## Thí nghiệm
 
-```python
-DATA_DIR = Path("/kaggle/input/datasets/tnguynthnh142/mta-subway-ny")
-SCHEDULE_DIR = Path("/kaggle/input/datasets/tnguynthnh142/schedule-subway")
-OUT_DIR = Path("/kaggle/working")
-```
+| `RUN_EXPERIMENT` | Mô hình |
+|------------------|---------|
+| `default` | MLP + HistGBM blend |
+| `model_mlp` | MLP |
+| `model_lstm` | LSTM |
 
-**Thử nghiệm mô hình:** `RUN_EXPERIMENT` = `default` | `model_mlp` | `model_lstm` (đổi cả `OUT_DIR` nếu muốn tách kết quả, vd. `outputs/model_mlp`).
+Metrics: MAE, RMSE, R², MAPE, SMAPE → `OUT_DIR/nn_eval_summary.csv`.

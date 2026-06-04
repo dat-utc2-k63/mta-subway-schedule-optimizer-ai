@@ -2,7 +2,6 @@
 """Pipeline MTA: paths (Kaggle/local), preset thí nghiệm, helpers NN/ML — xem LITERATURE.md."""
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -494,6 +493,32 @@ def smape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     return float(np.mean(np.abs(y_true[mask] - y_pred[mask]) / denom[mask]) * 100)
 
 
+def regression_metrics(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    *,
+    mape_min_demand: float = 100.0,
+) -> dict[str, float]:
+    """MAE, RMSE, R², MAPE (%), SMAPE (%) trên demand thực."""
+    from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error, r2_score
+
+    yt = np.asarray(y_true, dtype=float)
+    yp = np.asarray(y_pred, dtype=float)
+    mask = yt > mape_min_demand
+    mape = (
+        float(mean_absolute_percentage_error(yt[mask], yp[mask]) * 100)
+        if mask.any()
+        else float("nan")
+    )
+    return {
+        "mae": float(mean_absolute_error(yt, yp)),
+        "rmse": float(np.sqrt(np.mean((yt - yp) ** 2))),
+        "r2": float(r2_score(yt, yp)),
+        "mape_pct": mape,
+        "smape_pct": smape(yt, yp),
+    }
+
+
 # --- Experiment presets (full-route notebook) ---
 _CONFIG_KEYS = (
     "DEMAND_MODEL_TYPE",
@@ -516,12 +541,20 @@ _CONFIG_KEYS = (
     "NN_EPOCHS_CV",
     "LSTM_SEQ_LEN",
     "TUNE_RESID_CLIP_ON_VAL",
+    "HISTGBM_BLEND_WEIGHT",
 )
 
 EXPERIMENTS: dict[str, dict[str, Any]] = {
     "default": {
-        "title": "blend (MLP + HistGBM)",
-        "overrides": {},
+        "title": "blend",
+        "overrides": {
+            "DEMAND_MODEL_TYPE": "blend",
+            "USE_HISTGBM_BLEND": True,
+            "CV_USE_BLEND": True,
+            "TUNE_RESID_CLIP_ON_VAL": True,
+            "LSTM_SEQ_LEN": 7,
+            "HISTGBM_BLEND_WEIGHT": None,
+        },
     },
     "model_mlp": {
         "title": "mlp",
@@ -529,6 +562,8 @@ EXPERIMENTS: dict[str, dict[str, Any]] = {
             "DEMAND_MODEL_TYPE": "mlp",
             "USE_HISTGBM_BLEND": False,
             "CV_USE_BLEND": False,
+            "TUNE_RESID_CLIP_ON_VAL": True,
+            "LSTM_SEQ_LEN": 7,
         },
     },
     "model_lstm": {
@@ -550,49 +585,11 @@ def list_experiment_names() -> list[str]:
     return list(EXPERIMENTS.keys())
 
 
-def apply_experiment(name: str, g: dict[str, Any]) -> dict[str, Any]:
+def apply_experiment(name: str, g: dict[str, Any]) -> None:
+    """Áp preset theo RUN_EXPERIMENT (gồm DEMAND_MODEL_TYPE và flags liên quan)."""
     if name not in EXPERIMENTS:
         raise KeyError(f"Unknown experiment {name!r}. Use: {list_experiment_names()}")
-    meta = EXPERIMENTS[name]
-    for key, val in (meta.get("overrides") or {}).items():
+    for key, val in (EXPERIMENTS[name].get("overrides") or {}).items():
         if key not in _CONFIG_KEYS:
             raise KeyError(f"Preset key not allowed: {key}")
         g[key] = val
-    snapshot: dict[str, Any] = {"run_experiment": name, "title": meta.get("title", "")}
-    for key in _CONFIG_KEYS:
-        if key in g:
-            snapshot[key] = g[key]
-    return snapshot
-
-
-def compare_experiment_outputs(outputs_root: Path | str = "outputs") -> pd.DataFrame:
-    root = Path(outputs_root)
-    rows: list[dict[str, Any]] = []
-    for eid in sorted(EXPERIMENTS):
-        path = root / eid / "baseline_metrics.json"
-        if not path.exists():
-            continue
-        with open(path, encoding="utf-8") as f:
-            blob = json.load(f)
-        nn = blob.get("nn_eval") or {}
-        hold, cv = nn.get("holdout") or {}, nn.get("cv") or {}
-        opt = (blob.get("optimized") or {}).get("weekday_peak") or {}
-        base = (blob.get("baseline") or {}).get("weekday_peak") or {}
-
-        def _impr(a: float, b: float) -> float | None:
-            return (float(a) - float(b)) / float(a) * 100.0 if a else None
-
-        rows.append(
-            {
-                "experiment": eid,
-                "demand_model_type": hold.get("model_type"),
-                "nn_holdout_mae": hold.get("mae_nn"),
-                "nn_cv_mae_mean": cv.get("mae_nn_mean"),
-                "wait_impr_pct": _impr(
-                    base.get("total_passenger_min_wait"),
-                    opt.get("total_passenger_min_wait"),
-                ),
-                "obj_impr_pct": _impr(base.get("objective"), opt.get("objective")),
-            }
-        )
-    return pd.DataFrame(rows) if rows else pd.DataFrame()
