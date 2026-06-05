@@ -229,6 +229,163 @@ def derive_route_operating_hours(
     return sorted(hours.tolist())
 
 
+def derive_operating_hours_by_route_direction(
+    headway: pd.DataFrame,
+    route_ids: list[str],
+    *,
+    directions: list[int] | None = None,
+    min_trips: int = 1,
+) -> dict[tuple[str, int], list[int]]:
+    """Giờ hoạt động theo (route, direction) — chính xác hơn gộp theo route."""
+    dirs = directions
+    if dirs is None:
+        dirs = sorted(headway["direction_id"].dropna().unique().astype(int).tolist())
+    out: dict[tuple[str, int], list[int]] = {}
+    for rid in route_ids:
+        rs = str(rid).strip()
+        for d in dirs:
+            sub = headway.loc[
+                (headway["route_id"].astype(str) == rs) & (headway["direction_id"] == int(d))
+            ]
+            if sub.empty:
+                continue
+            agg = sub.groupby("hour")["trip_count"].sum()
+            hours = sorted(agg.loc[agg >= min_trips].index.astype(int).tolist())
+            if hours:
+                out[(rs, int(d))] = hours
+    return out
+
+
+def gtfs_time_to_minutes(t: str) -> float:
+    """GTFS departure_time HH:MM:SS (có thể >24h)."""
+    if not isinstance(t, str) or ":" not in t:
+        return float("nan")
+    h, m, s = t.split(":")
+    return int(h) * 60 + int(m) + int(s) / 60.0
+
+
+def build_route_direction_departure_windows(
+    schedule_dir: Path,
+    *,
+    service_id: str = "Weekday",
+) -> pd.DataFrame:
+    """First/last departure (phút, giờ bucket) theo (route_id, direction_id) từ GTFS."""
+    schedule_dir = Path(schedule_dir)
+    trips = pd.read_csv(
+        schedule_dir / "trips.txt",
+        dtype={"trip_id": str, "route_id": str, "service_id": str},
+    )
+    stop_times = pd.read_csv(
+        schedule_dir / "stop_times.txt",
+        dtype={"trip_id": str, "departure_time": str, "arrival_time": str},
+        usecols=lambda c: c in {"trip_id", "stop_sequence", "departure_time", "arrival_time"},
+    )
+    cal_path = schedule_dir / "calendar.txt"
+    available_services = trips["service_id"].dropna().unique().tolist()
+    if cal_path.exists():
+        cal = pd.read_csv(cal_path, dtype={"service_id": str})
+        available_services = cal["service_id"].dropna().unique().tolist() or available_services
+    if service_id not in available_services and available_services:
+        service_id = available_services[0]
+
+    trips_f = trips[trips["service_id"] == service_id].copy()
+    if trips_f.empty:
+        trips_f = trips.copy()
+    if "direction_id" not in trips_f.columns:
+        trips_f["direction_id"] = 0
+    trips_f["direction_id"] = (
+        pd.to_numeric(trips_f["direction_id"], errors="coerce").fillna(0).astype(int)
+    )
+
+    first_stop = (
+        stop_times.sort_values(["trip_id", "stop_sequence"])
+        .groupby("trip_id", as_index=False)
+        .first()[["trip_id", "departure_time", "arrival_time"]]
+    )
+    first_stop["dep_str"] = first_stop["departure_time"].fillna(first_stop["arrival_time"])
+    first_stop["dep_min"] = first_stop["dep_str"].map(gtfs_time_to_minutes)
+    first_stop = first_stop.dropna(subset=["dep_min"])
+
+    merged = trips_f[["trip_id", "route_id", "direction_id"]].merge(
+        first_stop[["trip_id", "dep_min"]], on="trip_id", how="inner"
+    )
+    merged["route_id"] = merged["route_id"].astype(str)
+
+    rows = []
+    for (route, direction), g in merged.groupby(["route_id", "direction_id"]):
+        dep = g["dep_min"].to_numpy(dtype=float)
+        first_m, last_m = float(dep.min()), float(dep.max())
+        rows.append(
+            dict(
+                route_id=str(route),
+                direction_id=int(direction),
+                first_dep_min=first_m,
+                last_dep_min=last_m,
+                first_dep_time=_minutes_to_gtfs_time(first_m),
+                last_dep_time=_minutes_to_gtfs_time(last_m),
+                first_hour=int(first_m // 60) % 24,
+                last_hour=int(last_m // 60) % 24,
+                n_trips=int(len(dep)),
+            )
+        )
+    return pd.DataFrame(rows).sort_values(["route_id", "direction_id"]).reset_index(drop=True)
+
+
+def _minutes_to_gtfs_time(minutes: float) -> str:
+    m = int(round(float(minutes)))
+    h, mm = divmod(m, 60)
+    return f"{h:02d}:{mm:02d}:00"
+
+
+def apply_service_window_constraints(
+    trips: np.ndarray,
+    *,
+    slot_route: np.ndarray,
+    slot_dir: np.ndarray,
+    slot_hour: np.ndarray,
+    windows: pd.DataFrame,
+    baseline_trips: np.ndarray | None = None,
+    trips_min: np.ndarray | None = None,
+    trips_max: np.ndarray | None = None,
+) -> np.ndarray:
+    """Ràng buộc opt_trips trong khung first/last departure GTFS theo (route, direction).
+
+    - Ngoài khung giờ: không tăng so baseline (giữ mức phục vụ tối thiểu).
+    - Giờ first/last: trips >= max(baseline, TRIPS_MIN) để giữ điểm đầu/cuối dịch vụ.
+    """
+    t = np.asarray(trips, dtype=int).copy()
+    win = windows.set_index(["route_id", "direction_id"])
+    base = np.asarray(baseline_trips, dtype=int) if baseline_trips is not None else None
+    tmin = np.asarray(trips_min, dtype=int) if trips_min is not None else None
+    tmax = np.asarray(trips_max, dtype=int) if trips_max is not None else None
+
+    for i in range(len(t)):
+        key = (str(slot_route[i]), int(slot_dir[i]))
+        if key not in win.index:
+            continue
+        row = win.loc[key]
+        fh, lh = int(row["first_hour"]), int(row["last_hour"])
+        h = int(slot_hour[i])
+        in_window = (fh <= h <= lh) if fh <= lh else (h >= fh or h <= lh)
+
+        if not in_window:
+            floor = int(base[i]) if base is not None else (int(tmin[i]) if tmin is not None else 1)
+            t[i] = floor
+            continue
+
+        if h == fh or h == lh:
+            floor = int(base[i]) if base is not None else 1
+            if tmin is not None:
+                floor = max(floor, int(tmin[i]))
+            t[i] = max(int(t[i]), floor)
+
+        if tmax is not None:
+            t[i] = min(int(t[i]), int(tmax[i]))
+        if tmin is not None:
+            t[i] = max(int(t[i]), int(tmin[i]))
+    return t
+
+
 def format_keras_inputs(
     route_idx: np.ndarray,
     num_feat: np.ndarray,
