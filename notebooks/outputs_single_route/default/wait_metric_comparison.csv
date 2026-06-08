@@ -1,0 +1,3 @@
+schedule,wait_v1,wait_v2,overflow_pct,total_overflow_pax,improve_v1_pct,improve_v2_pct
+baseline,806108.1095598085,806108.1095598085,0.0,0.0,,
+optimized,664030.4774806956,664030.4774806956,0.0,0.0,17.62513370032926,17.62513370032926

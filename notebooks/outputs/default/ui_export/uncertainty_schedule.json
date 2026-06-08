@@ -1,0 +1,20 @@
+[
+  {
+    "risk_level":"aggressive",
+    "total_trips":11566.0,
+    "total_wait":10674887.0031106882,
+    "trips_band_width":0.0829103215
+  },
+  {
+    "risk_level":"moderate",
+    "total_trips":11583.0,
+    "total_wait":10672341.5713394023,
+    "trips_band_width":0.0829103215
+  },
+  {
+    "risk_level":"conservative",
+    "total_trips":11895.0,
+    "total_wait":10639049.4877197854,
+    "trips_band_width":0.0829103215
+  }
+]

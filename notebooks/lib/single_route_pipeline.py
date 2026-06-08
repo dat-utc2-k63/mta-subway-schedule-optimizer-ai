@@ -2,6 +2,7 @@
 """Pipeline MTA: paths (Kaggle/local), preset thí nghiệm, helpers NN/ML — xem LITERATURE.md."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -317,6 +318,37 @@ def report_bound_status(
         "ok_peak_interior": ok_peak,
         "by_hour_group": by_group,
     }
+
+
+def bound_status_jsonable(status: dict[str, Any]) -> dict[str, Any]:
+    """Bản JSON-safe của report_bound_status (bỏ DataFrame by_hour_group)."""
+    return {k: v for k, v in status.items() if k != "by_hour_group"}
+
+
+def json_default(obj: Any) -> Any:
+    """default= cho json.dump — numpy/pandas → native Python."""
+    if obj is None or isinstance(obj, (str, bool, int, float)):
+        return obj
+    if isinstance(obj, (np.integer,)):
+        return int(obj)
+    if isinstance(obj, (np.floating,)):
+        return float(obj)
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, pd.DataFrame):
+        return obj.to_dict(orient="records")
+    if isinstance(obj, pd.Series):
+        return {k: json_default(v) for k, v in obj.items()}
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+
+def dump_json(path: Path | str, obj: Any, **kwargs: Any) -> None:
+    """Ghi dict/list ra JSON; tự xử lý numpy/pandas lồng nhau."""
+    p = Path(path)
+    with p.open("w", encoding="utf-8") as f:
+        json.dump(obj, f, default=json_default, **kwargs)
 
 
 def bound_status_by_hour_groups(
@@ -1589,8 +1621,8 @@ def plot_calibration_curve(
     ax.set_xlabel("Nominal coverage")
     ax.set_ylabel("Empirical coverage")
     ax.set_title(title)
-    ax.set_xlim(0, 0.5, 1.0)
-    ax.set_ylim(0, 0.5, 1.0)
+    ax.set_xlim(0.0, 1.0)
+    ax.set_ylim(0.0, 1.0)
     ax.legend(fontsize=8)
     ax.grid(True, alpha=0.3)
     if save_path is not None:

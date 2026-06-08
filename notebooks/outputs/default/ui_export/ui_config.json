@@ -1,0 +1,85 @@
+{
+  "demand_model_type": "blend",
+  "spillover_alpha_global": 0.02,
+  "spillover_alpha_per_route": {
+    "GS": 0.0,
+    "H": 0.0,
+    "Z": 0.0,
+    "N": 0.0
+  },
+  "resid_clip": 0.55,
+  "blend_mlp_weight": 0.8,
+  "lambda_opt": 446.0,
+  "lambda_cost_eval": 150.0,
+  "lambda_candidates": [
+    446.0
+  ],
+  "opt_target": "objective",
+  "trips_peak_max_factor": 1.22,
+  "trips_offpeak_max_factor": 1.35,
+  "trips_overnight_max_factor": 1.1,
+  "trips_min_factor": 0.5,
+  "trips_max_delta": 3,
+  "target_max_bind_fraction": 0.45,
+  "target_peak_bind_fraction": 0.35,
+  "rainy_peak_trips_min_factor": 0.65,
+  "use_demand_spillover": true,
+  "transfer_min_weight": 0.1,
+  "scenarios": [
+    "weekday_peak",
+    "weekend",
+    "rainy_day"
+  ],
+  "rainy_hour_boost": {
+    "17": 1.18,
+    "18": 1.22,
+    "19": 1.18,
+    "8": 1.1,
+    "9": 1.1
+  },
+  "num_features": [
+    "hour_sin",
+    "hour_cos",
+    "dow_sin",
+    "dow_cos",
+    "month_sin",
+    "month_cos",
+    "is_weekend",
+    "is_us_holiday",
+    "temperature_c",
+    "apparent_temperature_c",
+    "precipitation_mm",
+    "rain_mm",
+    "snowfall_cm",
+    "windspeed_kmh",
+    "windgusts_kmh",
+    "is_rain",
+    "is_snow",
+    "is_severe_wind",
+    "is_peak_morning",
+    "is_peak_evening",
+    "is_overnight",
+    "is_major_event_window",
+    "log_baseline",
+    "log_rain_mm",
+    "log_precip_mm",
+    "rain_x_peak",
+    "wind_x_rain",
+    "log_lag_24h",
+    "log_lag_168h",
+    "log_rolling_7d"
+  ],
+  "lag_feature_cols": [
+    "log_lag_24h",
+    "log_lag_168h",
+    "log_rolling_7d"
+  ],
+  "nn_hidden": [
+    64,
+    32
+  ],
+  "capacity_per_trip": 1200,
+  "use_route_embedding": true,
+  "split_demand_by_direction": true,
+  "lambda_auto_calibrate": true
+}

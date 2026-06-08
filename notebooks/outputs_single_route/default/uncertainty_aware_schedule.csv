@@ -1,0 +1,4 @@
+risk_level,total_trips,total_wait,trips_band_width
+aggressive,614.0,616763.087908847,0.0
+moderate,614.0,616763.087908847,0.0
+conservative,614.0,616763.087908847,0.0

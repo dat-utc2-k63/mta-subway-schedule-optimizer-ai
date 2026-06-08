@@ -1,0 +1,481 @@
+{
+  "run_experiment": "default",
+  "demand_model_type": "blend",
+  "n_slots": 48,
+  "n_routes": 1,
+  "n_hours": 24,
+  "routes": [
+    "1"
+  ],
+  "opt_method": "Analytical",
+  "n_headway_fallback": 0,
+  "scenarios": [
+    "weekday_peak",
+    "weekend",
+    "rainy_day"
+  ],
+  "lambda_cost_default": 150.0,
+  "lambda_opt": 699.0,
+  "lambda_used": {
+    "weekday_peak": 1083.1307173331982,
+    "weekend": 763.3174378253225,
+    "rainy_day": 1086.280091488267
+  },
+  "split_demand_by_direction": true,
+  "bound_status": {
+    "weekday_peak": {
+      "at_min_pct": 8.333333333333332,
+      "at_max_pct": 43.75,
+      "interior_pct": 47.91666666666667,
+      "peak_interior_pct": 33.33333333333334,
+      "ok_total_interior": false,
+      "ok_peak_interior": false
+    },
+    "weekend": {
+      "at_min_pct": 0.0,
+      "at_max_pct": 43.75,
+      "interior_pct": 56.25,
+      "peak_interior_pct": 83.33333333333334,
+      "ok_total_interior": false,
+      "ok_peak_interior": true
+    },
+    "rainy_day": {
+      "at_min_pct": 8.333333333333332,
+      "at_max_pct": 43.75,
+      "interior_pct": 47.91666666666667,
+      "peak_interior_pct": 33.33333333333334,
+      "ok_total_interior": false,
+      "ok_peak_interior": false
+    }
+  },
+  "bound_by_hour": {
+    "weekday_peak": [
+      {
+        "hour_group": "peak",
+        "n_slots": 12,
+        "at_min_pct": 0.0,
+        "at_max_pct": 66.66666666666666,
+        "interior_pct": 33.33333333333334
+      },
+      {
+        "hour_group": "overnight",
+        "n_slots": 16,
+        "at_min_pct": 25.0,
+        "at_max_pct": 12.5,
+        "interior_pct": 62.5
+      },
+      {
+        "hour_group": "off_peak",
+        "n_slots": 20,
+        "at_min_pct": 0.0,
+        "at_max_pct": 55.00000000000001,
+        "interior_pct": 44.99999999999999
+      }
+    ],
+    "weekend": [
+      {
+        "hour_group": "peak",
+        "n_slots": 12,
+        "at_min_pct": 0.0,
+        "at_max_pct": 16.666666666666664,
+        "interior_pct": 83.33333333333334
+      },
+      {
+        "hour_group": "overnight",
+        "n_slots": 16,
+        "at_min_pct": 0.0,
+        "at_max_pct": 25.0,
+        "interior_pct": 75.0
+      },
+      {
+        "hour_group": "off_peak",
+        "n_slots": 20,
+        "at_min_pct": 0.0,
+        "at_max_pct": 75.0,
+        "interior_pct": 25.0
+      }
+    ],
+    "rainy_day": [
+      {
+        "hour_group": "peak",
+        "n_slots": 12,
+        "at_min_pct": 0.0,
+        "at_max_pct": 66.66666666666666,
+        "interior_pct": 33.33333333333334
+      },
+      {
+        "hour_group": "overnight",
+        "n_slots": 16,
+        "at_min_pct": 25.0,
+        "at_max_pct": 12.5,
+        "interior_pct": 62.5
+      },
+      {
+        "hour_group": "off_peak",
+        "n_slots": 20,
+        "at_min_pct": 0.0,
+        "at_max_pct": 55.00000000000001,
+        "interior_pct": 44.99999999999999
+      }
+    ]
+  },
+  "opt_target": "balanced",
+  "balanced_weights": {
+    "wait": 0.6,
+    "cost": 0.4
+  },
+  "lambda_candidates": [
+    699.0
+  ],
+  "baseline": {
+    "weekday_peak": {
+      "total_passenger_min_wait": 806108.1095598085,
+      "weighted_avg_wait_min": 2.608045972557275,
+      "total_fleet_cost": 69300.0,
+      "total_trips": 462.0,
+      "headway_std": 5.902140475526006,
+      "objective": 875408.1095598085,
+      "lambda_cost": 150.0
+    },
+    "weekend": {
+      "total_passenger_min_wait": 577894.1539513934,
+      "weighted_avg_wait_min": 2.8239705352000137,
+      "total_fleet_cost": 69300.0,
+      "total_trips": 462.0,
+      "headway_std": 5.902140475526006,
+      "objective": 647194.1539513934,
+      "lambda_cost": 150.0
+    },
+    "rainy_day": {
+      "total_passenger_min_wait": 831852.0692467571,
+      "weighted_avg_wait_min": 2.5917650143111244,
+      "total_fleet_cost": 69300.0,
+      "total_trips": 462.0,
+      "headway_std": 5.902140475526006,
+      "objective": 901152.0692467571,
+      "lambda_cost": 150.0
+    }
+  },
+  "optimized": {
+    "weekday_peak": {
+      "total_passenger_min_wait": 664030.4774806956,
+      "weighted_avg_wait_min": 2.1483743829280026,
+      "total_fleet_cost": 82650.0,
+      "total_trips": 551.0,
+      "headway_std": 7.81693410370888,
+      "objective": 746680.4774806956,
+      "lambda_cost": 150.0
+    },
+    "weekend": {
+      "total_passenger_min_wait": 473320.26963621564,
+      "weighted_avg_wait_min": 2.312953827316314,
+      "total_fleet_cost": 80400.0,
+      "total_trips": 536.0,
+      "headway_std": 4.480446270600236,
+      "objective": 553720.2696362156,
+      "lambda_cost": 150.0
+    },
+    "rainy_day": {
+      "total_passenger_min_wait": 683843.1876455161,
+      "weighted_avg_wait_min": 2.130620232296255,
+      "total_fleet_cost": 82950.0,
+      "total_trips": 553.0,
+      "headway_std": 7.823455128224078,
+      "objective": 766793.1876455161,
+      "lambda_cost": 150.0
+    }
+  },
+  "nn_eval": {
+    "holdout": {
+      "test_block": "autumn_2025",
+      "val_block": "summer_2025",
+      "n_test": 2184,
+      "model_type": "blend",
+      "blend_mlp_weight": 0.8,
+      "baseline": {
+        "mae": 1940.4684626567694,
+        "rmse": 2998.957569558061,
+        "r2": 0.9009948925159771,
+        "mape_pct": 17.08384870473506,
+        "smape_pct": 17.32730914995491
+      },
+      "model": {
+        "mae": 905.5213535910063,
+        "rmse": 1563.9368024502594,
+        "r2": 0.9730750220542219,
+        "mape_pct": 8.633050568207672,
+        "smape_pct": 8.451761134839602
+      },
+      "mae_improvement_pct": 53.334910047895214,
+      "resid_clip": 0.55
+    },
+    "cv": {
+      "cv_mode": "season_year",
+      "cv_use_blend": true,
+      "n_folds": 8,
+      "mae_nn_mean": 952.6702553448665,
+      "rmse_nn_mean": 1583.0369049379215,
+      "mae_baseline_mean": 1623.1514539138143,
+      "rmse_baseline_mean": 2670.608552056082,
+      "r2_nn_mean": 0.9652617002294596,
+      "r2_baseline_mean": 0.9011096936259118,
+      "mae_improvement_pct": 41.3073713455546
+    }
+  },
+  "lambda_sensitivity_weekday_peak": [
+    {
+      "lambda_eval": 100,
+      "lambda_opt": 1083.130717333202,
+      "total_trips": 551.0,
+      "total_passenger_min_wait": 664030.4774806956,
+      "total_fleet_cost": 55100.0,
+      "objective": 719130.4774806956,
+      "baseline_objective": 852308.1095598085,
+      "improvement_pct": 15.625526800149206,
+      "pct_at_trips_max": 43.75,
+      "elapsed_s": 0.19771933555603027
+    },
+    {
+      "lambda_eval": 150,
+      "lambda_opt": 1083.1307173331982,
+      "total_trips": 551.0,
+      "total_passenger_min_wait": 664030.4774806956,
+      "total_fleet_cost": 82650.0,
+      "objective": 746680.4774806956,
+      "baseline_objective": 875408.1095598085,
+      "improvement_pct": 14.704870868039196,
+      "pct_at_trips_max": 43.75,
+      "elapsed_s": 0.18711304664611816
+    },
+    {
+      "lambda_eval": 200,
+      "lambda_opt": 1083.1307173332034,
+      "total_trips": 551.0,
+      "total_passenger_min_wait": 664030.4774806956,
+      "total_fleet_cost": 110200.0,
+      "objective": 774230.4774806956,
+      "baseline_objective": 898508.1095598085,
+      "improvement_pct": 13.831553745240901,
+      "pct_at_trips_max": 43.75,
+      "elapsed_s": 0.21669936180114746
+    },
+    {
+      "lambda_eval": 400,
+      "lambda_opt": 1083.130717333198,
+      "total_trips": 551.0,
+      "total_passenger_min_wait": 664030.4774806956,
+      "total_fleet_cost": 220400.0,
+      "objective": 884430.4774806956,
+      "baseline_objective": 990908.1095598085,
+      "improvement_pct": 10.74545975069409,
+      "pct_at_trips_max": 43.75,
+      "elapsed_s": 0.32563018798828125
+    },
+    {
+      "lambda_eval": 600,
+      "lambda_opt": 1083.1307173332016,
+      "total_trips": 551.0,
+      "total_passenger_min_wait": 664030.4774806956,
+      "total_fleet_cost": 330600.0,
+      "objective": 994630.4774806956,
+      "baseline_objective": 1083308.1095598084,
+      "improvement_pct": 8.185818170893791,
+      "pct_at_trips_max": 43.75,
+      "elapsed_s": 0.2077488899230957
+    },
+    {
+      "lambda_eval": 1000,
+      "lambda_opt": 1083.130717333198,
+      "total_trips": 551.0,
+      "total_passenger_min_wait": 664030.4774806956,
+      "total_fleet_cost": 551000.0,
+      "objective": 1215030.4774806956,
+      "baseline_objective": 1268108.1095598084,
+      "improvement_pct": 4.185576267431754,
+      "pct_at_trips_max": 43.75,
+      "elapsed_s": 0.2100830078125
+    }
+  ],
+  "pareto_frontier_weekday_peak": [
+    {
+      "lambda_equiv": 414.0,
+      "f1": 620257.4448229802,
+      "f2": 90300.0,
+      "total_trips": 602.0,
+      "w": 0.9,
+      "chebyshev": 3314.999999999999,
+      "f1_improve_pct": 23.05530269858168,
+      "f2_delta_pct": 30.303030303030305,
+      "z_star_f1": 616763.087908847,
+      "z_star_f2": 57150.0
+    },
+    {
+      "lambda_equiv": 481.0,
+      "f1": 621230.8257519979,
+      "f2": 90000.0,
+      "total_trips": 600.0,
+      "w": 0.8578947368421053,
+      "chebyshev": 4668.157894736842,
+      "f1_improve_pct": 22.934552030343248,
+      "f2_delta_pct": 29.87012987012987,
+      "z_star_f1": 616763.087908847,
+      "z_star_f2": 57150.0
+    },
+    {
+      "lambda_equiv": 558.0,
+      "f1": 623870.7418969001,
+      "f2": 89250.0,
+      "total_trips": 595.0,
+      "w": 0.8157894736842105,
+      "chebyshev": 5913.1578947368425,
+      "f1_improve_pct": 22.607062936312943,
+      "f2_delta_pct": 28.78787878787879,
+      "z_star_f1": 616763.087908847,
+      "z_star_f2": 57150.0
+    },
+    {
+      "lambda_equiv": 699.0,
+      "f1": 625826.7555645232,
+      "f2": 88800.0,
+      "total_trips": 592.0,
+      "w": 0.7736842105263158,
+      "chebyshev": 7162.894736842107,
+      "f1_improve_pct": 22.36441388658546,
+      "f2_delta_pct": 28.13852813852814,
+      "z_star_f1": 616763.087908847,
+      "z_star_f2": 57150.0
+    },
+    {
+      "lambda_equiv": 753.0,
+      "f1": 627271.6212105504,
+      "f2": 88500.0,
+      "total_trips": 590.0,
+      "w": 0.6894736842105262,
+      "chebyshev": 9735.000000000002,
+      "f1_improve_pct": 22.185174200383038,
+      "f2_delta_pct": 27.705627705627705,
+      "z_star_f1": 616763.087908847,
+      "z_star_f2": 57150.0
+    },
+    {
+      "lambda_equiv": 812.0,
+      "f1": 632003.9894766285,
+      "f2": 87600.0,
+      "total_trips": 584.0,
+      "w": 0.6473684210526316,
+      "chebyshev": 10737.631578947368,
+      "f1_improve_pct": 21.59811047903402,
+      "f2_delta_pct": 26.406926406926406,
+      "z_star_f1": 616763.087908847,
+      "z_star_f2": 57150.0
+    },
+    {
+      "lambda_equiv": 875.0,
+      "f1": 635381.546918333,
+      "f2": 87000.0,
+      "total_trips": 580.0,
+      "w": 0.5631578947368421,
+      "chebyshev": 13039.736842105263,
+      "f1_improve_pct": 21.179114887543328,
+      "f2_delta_pct": 25.541125541125542,
+      "z_star_f1": 616763.087908847,
+      "z_star_f2": 57150.0
+    },
+    {
+      "lambda_equiv": 943.0,
+      "f1": 643705.7448406344,
+      "f2": 85650.0,
+      "total_trips": 571.0,
+      "w": 0.4368421052631579,
+      "chebyshev": 16050.0,
+      "f1_improve_pct": 20.146474498049297,
+      "f2_delta_pct": 23.593073593073594,
+      "z_star_f1": 616763.087908847,
+      "z_star_f2": 57150.0
+    },
+    {
+      "lambda_equiv": 1017.0,
+      "f1": 654638.4845265783,
+      "f2": 84000.0,
+      "total_trips": 560.0,
+      "w": 0.3526315789473684,
+      "chebyshev": 17381.842105263157,
+      "f1_improve_pct": 18.790237095610316,
+      "f2_delta_pct": 21.21212121212121,
+      "z_star_f1": 616763.087908847,
+      "z_star_f2": 57150.0
+    },
+    {
+      "lambda_equiv": 1096.0,
+      "f1": 666215.0267370162,
+      "f2": 82350.0,
+      "total_trips": 549.0,
+      "w": 0.31052631578947365,
+      "chebyshev": 17374.736842105263,
+      "f1_improve_pct": 17.35413416187858,
+      "f2_delta_pct": 18.83116883116883,
+      "z_star_f1": 616763.087908847,
+      "z_star_f2": 57150.0
+    },
+    {
+      "lambda_equiv": 1181.0,
+      "f1": 676560.0548707128,
+      "f2": 81000.0,
+      "total_trips": 540.0,
+      "w": 0.26842105263157895,
+      "chebyshev": 17448.157894736843,
+      "f1_improve_pct": 16.07080404635031,
+      "f2_delta_pct": 16.883116883116884,
+      "z_star_f1": 616763.087908847,
+      "z_star_f2": 57150.0
+    },
+    {
+      "lambda_equiv": 1273.0,
+      "f1": 696210.3971009455,
+      "f2": 78600.0,
+      "total_trips": 524.0,
+      "w": 0.1842105263157895,
+      "chebyshev": 17498.684210526317,
+      "f1_improve_pct": 13.633123293955556,
+      "f2_delta_pct": 13.41991341991342,
+      "z_star_f1": 616763.087908847,
+      "z_star_f2": 57150.0
+    },
+    {
+      "lambda_equiv": 1372.0,
+      "f1": 718972.924315274,
+      "f2": 76050.0,
+      "total_trips": 507.0,
+      "w": 0.14210526315789473,
+      "chebyshev": 16214.21052631579,
+      "f1_improve_pct": 10.809367156983004,
+      "f2_delta_pct": 9.740259740259742,
+      "z_star_f1": 616763.087908847,
+      "z_star_f2": 57150.0
+    },
+    {
+      "lambda_equiv": 1594.0,
+      "f1": 759268.7706835896,
+      "f2": 72000.0,
+      "total_trips": 480.0,
+      "w": 0.1,
+      "chebyshev": 14250.56827747426,
+      "f1_improve_pct": 5.810552991682027,
+      "f2_delta_pct": 3.896103896103896,
+      "z_star_f1": 616763.087908847,
+      "z_star_f2": 57150.0
+    }
+  ],
+  "pareto_knee_weekday_peak": {
+    "lambda_equiv": 699.0,
+    "f1": 625826.7555645232,
+    "f2": 88800.0,
+    "total_trips": 592.0,
+    "w": 0.7736842105263158,
+    "chebyshev": 7162.894736842107,
+    "f1_improve_pct": 22.36441388658546,
+    "f2_delta_pct": 28.13852813852814,
+    "z_star_f1": 616763.087908847,
+    "z_star_f2": 57150.0
+  }
+}
