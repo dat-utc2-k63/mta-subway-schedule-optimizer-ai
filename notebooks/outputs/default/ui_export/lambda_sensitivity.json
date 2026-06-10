@@ -9,7 +9,7 @@
     "baseline_objective":16458286.8254615646,
     "improvement_pct":14.3027644335,
     "pct_at_trips_max":17.9357021997,
-    "elapsed_s":5.7781684399
+    "elapsed_s":3.352878809
   },
   {
     "lambda_eval":150,
@@ -21,7 +21,7 @@
     "baseline_objective":16883136.8254615664,
     "improvement_pct":13.8848012586,
     "pct_at_trips_max":17.9357021997,
-    "elapsed_s":5.8465373516
+    "elapsed_s":3.6349039078
   },
   {
     "lambda_eval":200,
@@ -33,7 +33,7 @@
     "baseline_objective":17307986.8254615664,
     "improvement_pct":13.4873571258,
     "pct_at_trips_max":17.9357021997,
-    "elapsed_s":5.7692582607
+    "elapsed_s":3.5019323826
   },
   {
     "lambda_eval":400,
@@ -45,7 +45,7 @@
     "baseline_objective":19007386.8254615664,
     "improvement_pct":12.0752527189,
     "pct_at_trips_max":17.9357021997,
-    "elapsed_s":5.7675013542
+    "elapsed_s":3.3749341965
   },
   {
     "lambda_eval":600,
@@ -57,7 +57,7 @@
     "baseline_objective":20706786.8254615664,
     "improvement_pct":10.8949303117,
     "pct_at_trips_max":17.9357021997,
-    "elapsed_s":5.8400981426
+    "elapsed_s":3.3465423584
   },
   {
     "lambda_eval":1000,
@@ -69,6 +69,6 @@
     "baseline_objective":24105586.8254615664,
     "improvement_pct":9.0335489868,
     "pct_at_trips_max":17.9357021997,
-    "elapsed_s":5.7122600079
+    "elapsed_s":3.3489453793
   }
 ]

@@ -261,7 +261,7 @@
       "baseline_objective": 16458286.825461565,
       "improvement_pct": 14.302764433494449,
       "pct_at_trips_max": 17.93570219966159,
-      "elapsed_s": 5.778168439865112
+      "elapsed_s": 3.3528788089752197
     },
     {
       "lambda_eval": 150,
@@ -273,7 +273,7 @@
       "baseline_objective": 16883136.825461566,
       "improvement_pct": 13.884801258610505,
       "pct_at_trips_max": 17.93570219966159,
-      "elapsed_s": 5.846537351608276
+      "elapsed_s": 3.634903907775879
     },
     {
       "lambda_eval": 200,
@@ -285,7 +285,7 @@
       "baseline_objective": 17307986.825461566,
       "improvement_pct": 13.48735712578963,
       "pct_at_trips_max": 17.93570219966159,
-      "elapsed_s": 5.769258260726929
+      "elapsed_s": 3.501932382583618
     },
     {
       "lambda_eval": 400,
@@ -297,7 +297,7 @@
       "baseline_objective": 19007386.825461566,
       "improvement_pct": 12.075252718906487,
       "pct_at_trips_max": 17.93570219966159,
-      "elapsed_s": 5.767501354217529
+      "elapsed_s": 3.374934196472168
     },
     {
       "lambda_eval": 600,
@@ -309,7 +309,7 @@
       "baseline_objective": 20706786.825461566,
       "improvement_pct": 10.894930311740117,
       "pct_at_trips_max": 17.93570219966159,
-      "elapsed_s": 5.840098142623901
+      "elapsed_s": 3.3465423583984375
     },
     {
       "lambda_eval": 1000,
@@ -321,7 +321,7 @@
       "baseline_objective": 24105586.825461566,
       "improvement_pct": 9.033548986803915,
       "pct_at_trips_max": 17.93570219966159,
-      "elapsed_s": 5.712260007858276
+      "elapsed_s": 3.348945379257202
     }
   ],
   "pareto_frontier_weekday_peak": [
