@@ -1,177 +1,177 @@
 [
   {
     "route_id":"M",
-    "mae_before":338.5965033473,
-    "mae_after":178.9994620889,
-    "benefit":159.5970412583,
-    "n_hours":24
-  },
-  {
-    "route_id":"R",
-    "mae_before":248.9843874919,
-    "mae_after":106.7774096868,
-    "benefit":142.2069778051,
-    "n_hours":24
-  },
-  {
-    "route_id":"C",
-    "mae_before":188.3830237406,
-    "mae_after":60.1009003945,
-    "benefit":128.2821233461,
-    "n_hours":24
-  },
-  {
-    "route_id":"Q",
-    "mae_before":178.0601606178,
-    "mae_after":69.3355686289,
-    "benefit":108.7245919889,
-    "n_hours":24
-  },
-  {
-    "route_id":"F",
-    "mae_before":196.7349867769,
-    "mae_after":90.7268486282,
-    "benefit":106.0081381487,
-    "n_hours":24
-  },
-  {
-    "route_id":"2",
-    "mae_before":162.145691728,
-    "mae_after":79.288001122,
-    "benefit":82.857690606,
-    "n_hours":24
-  },
-  {
-    "route_id":"5",
-    "mae_before":150.5511627985,
-    "mae_after":78.9753898187,
-    "benefit":71.5757729798,
-    "n_hours":24
-  },
-  {
-    "route_id":"4",
-    "mae_before":138.4333569792,
-    "mae_after":81.0334031992,
-    "benefit":57.39995378,
-    "n_hours":24
-  },
-  {
-    "route_id":"6",
-    "mae_before":285.5088556333,
-    "mae_after":233.8829709449,
-    "benefit":51.6258846884,
-    "n_hours":24
-  },
-  {
-    "route_id":"G",
-    "mae_before":160.2755986007,
-    "mae_after":112.1766110608,
-    "benefit":48.0989875399,
-    "n_hours":24
-  },
-  {
-    "route_id":"J",
-    "mae_before":172.4309261569,
-    "mae_after":134.4921595257,
-    "benefit":37.9387666312,
+    "mae_before":273.0932389906,
+    "mae_after":122.8484556463,
+    "benefit":150.2447833443,
     "n_hours":24
   },
   {
     "route_id":"1",
-    "mae_before":482.7796534518,
-    "mae_after":445.1368077145,
-    "benefit":37.6428457373,
+    "mae_before":346.4168489873,
+    "mae_after":308.1916698984,
+    "benefit":38.2251790889,
     "n_hours":24
   },
   {
-    "route_id":"W",
-    "mae_before":118.0512449637,
-    "mae_after":92.7932960916,
-    "benefit":25.2579488721,
+    "route_id":"J",
+    "mae_before":142.125998069,
+    "mae_after":111.3661933849,
+    "benefit":30.7598046841,
     "n_hours":24
   },
   {
-    "route_id":"7",
-    "mae_before":163.6002028453,
-    "mae_after":141.9762161759,
-    "benefit":21.6239866694,
+    "route_id":"G",
+    "mae_before":121.7605590769,
+    "mae_after":102.3850613244,
+    "benefit":19.3754977525,
     "n_hours":24
   },
   {
-    "route_id":"B",
-    "mae_before":117.2955646881,
-    "mae_after":96.2434684211,
-    "benefit":21.052096267,
+    "route_id":"6",
+    "mae_before":200.4513828494,
+    "mae_after":181.0950437129,
+    "benefit":19.3563391364,
     "n_hours":24
   },
   {
-    "route_id":"3",
-    "mae_before":108.4462194614,
-    "mae_after":94.5782535985,
-    "benefit":13.867965863,
+    "route_id":"R",
+    "mae_before":173.2879965751,
+    "mae_after":156.9965647889,
+    "benefit":16.2914317861,
     "n_hours":24
   },
   {
-    "route_id":"D",
-    "mae_before":104.2896601177,
-    "mae_after":95.5740052475,
-    "benefit":8.7156548702,
-    "n_hours":24
-  },
-  {
-    "route_id":"E",
-    "mae_before":115.8391878988,
-    "mae_after":115.6802499617,
-    "benefit":0.1589379371,
+    "route_id":"Q",
+    "mae_before":91.5144938527,
+    "mae_after":80.1400497264,
+    "benefit":11.3744441264,
     "n_hours":24
   },
   {
     "route_id":"FS",
-    "mae_before":16.9985205461,
-    "mae_after":16.9985205461,
+    "mae_before":12.6442785299,
+    "mae_after":12.6442785299,
     "benefit":0.0,
     "n_hours":24
   },
   {
     "route_id":"L",
-    "mae_before":452.4563673825,
-    "mae_after":452.4563673825,
+    "mae_before":407.535833615,
+    "mae_after":407.535833615,
     "benefit":0.0,
     "n_hours":24
   },
   {
-    "route_id":"A",
-    "mae_before":68.0733534532,
-    "mae_after":86.9065932633,
-    "benefit":-18.8332398101,
+    "route_id":"7",
+    "mae_before":104.8701623066,
+    "mae_after":105.9243501484,
+    "benefit":-1.0541878417,
     "n_hours":24
   },
   {
-    "route_id":"N",
-    "mae_before":84.9922060637,
-    "mae_after":107.2760138957,
-    "benefit":-22.283807832,
+    "route_id":"F",
+    "mae_before":120.4632164997,
+    "mae_after":124.4654098406,
+    "benefit":-4.0021933409,
+    "n_hours":24
+  },
+  {
+    "route_id":"C",
+    "mae_before":98.7694599033,
+    "mae_after":104.4105871358,
+    "benefit":-5.6411272325,
+    "n_hours":24
+  },
+  {
+    "route_id":"5",
+    "mae_before":111.3489929882,
+    "mae_after":139.1446085087,
+    "benefit":-27.7956155204,
     "n_hours":24
   },
   {
     "route_id":"Z",
-    "mae_before":36.6120002195,
-    "mae_after":60.478854695,
-    "benefit":-23.8668544755,
+    "mae_before":28.0254926441,
+    "mae_after":65.98795971,
+    "benefit":-37.9624670659,
     "n_hours":24
   },
   {
     "route_id":"H",
-    "mae_before":2.4574926078,
-    "mae_after":46.0985352993,
-    "benefit":-43.6410426915,
+    "mae_before":2.2280521726,
+    "mae_after":47.1469078961,
+    "benefit":-44.9188557235,
+    "n_hours":24
+  },
+  {
+    "route_id":"4",
+    "mae_before":101.8199609034,
+    "mae_after":149.7938249182,
+    "benefit":-47.9738640148,
+    "n_hours":24
+  },
+  {
+    "route_id":"2",
+    "mae_before":101.8829768852,
+    "mae_after":152.0816698085,
+    "benefit":-50.1986929233,
+    "n_hours":24
+  },
+  {
+    "route_id":"B",
+    "mae_before":94.5160897724,
+    "mae_after":165.2446285367,
+    "benefit":-70.7285387644,
+    "n_hours":24
+  },
+  {
+    "route_id":"A",
+    "mae_before":88.3966654477,
+    "mae_after":166.2413606449,
+    "benefit":-77.8446951972,
+    "n_hours":24
+  },
+  {
+    "route_id":"D",
+    "mae_before":83.8203325475,
+    "mae_after":163.4587743121,
+    "benefit":-79.6384417645,
+    "n_hours":24
+  },
+  {
+    "route_id":"W",
+    "mae_before":77.9234152712,
+    "mae_after":161.1975147245,
+    "benefit":-83.2740994534,
+    "n_hours":24
+  },
+  {
+    "route_id":"3",
+    "mae_before":61.8464031134,
+    "mae_after":176.9837948318,
+    "benefit":-115.1373917184,
+    "n_hours":24
+  },
+  {
+    "route_id":"E",
+    "mae_before":82.8894476996,
+    "mae_after":198.2087757509,
+    "benefit":-115.3193280513,
+    "n_hours":24
+  },
+  {
+    "route_id":"N",
+    "mae_before":60.302222984,
+    "mae_after":177.3875821969,
+    "benefit":-117.0853592129,
     "n_hours":24
   },
   {
     "route_id":"GS",
-    "mae_before":23.0174123945,
-    "mae_after":269.0649449365,
-    "benefit":-246.047532542,
+    "mae_before":17.1231891518,
+    "mae_after":298.3344013212,
+    "benefit":-281.2112121694,
     "n_hours":24
   }
 ]

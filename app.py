@@ -39,12 +39,11 @@ from lib.ui_scenario import (  # noqa: E402
 )
 from lib.ui_lambda import (  # noqa: E402
     LAMBDA_BALANCED,
-    LAMBDA_SLIDER_DEFAULT,
-    LAMBDA_SLIDER_MAX,
-    LAMBDA_SLIDER_MIN,
-    LAMBDA_SLIDER_STEP,
+    PARETO_COUNT,
     PRIORITY_COLORS,
     PRIORITY_VI,
+    default_pareto_index,
+    lambda_at_pareto_index,
     lambda_priority,
 )
 UI_DIR = NOTEBOOKS / "outputs" / "default" / "ui_export"
@@ -426,14 +425,16 @@ def main() -> None:
             )
 
         st.markdown("**Ưu tiên chờ ↔ chi phí**")
-        lambda_cost = st.slider(
-            "λ",
-            min_value=LAMBDA_SLIDER_MIN,
-            max_value=LAMBDA_SLIDER_MAX,
-            value=LAMBDA_SLIDER_DEFAULT,
-            step=LAMBDA_SLIDER_STEP,
-            help="Trái = nhiều chuyến, chờ ngắn · Phải = ít chuyến, chi phí thấp · λ≈450 ≈ Pareto cân bằng",
+        pareto_index = st.slider(
+            "Mức Pareto",
+            min_value=1,
+            max_value=PARETO_COUNT,
+            value=default_pareto_index(),
+            step=1,
+            help="1 = ưu tiên chờ · 20 = ưu tiên chi phí",
         )
+        lambda_cost = lambda_at_pareto_index(pareto_index)
+        st.markdown(f"**λ = {lambda_cost:.0f}**")
         st.markdown(priority_pill(lambda_cost), unsafe_allow_html=True)
 
         run_btn = st.button("Chạy tối ưu", type="primary", use_container_width=True)
@@ -443,9 +444,12 @@ def main() -> None:
 
     if not run_btn:
         if input_mode == "Theo ngày cụ thể":
-            st.info("Chọn tuyến, ngày, kéo slider λ rồi bấm **Chạy tối ưu**.")
+            st.info("Chọn tuyến, ngày, kéo mức Pareto (1–20) rồi bấm **Chạy tối ưu**.")
         else:
-            st.info("Chọn nhóm bắt buộc (ngày, mùa, thời tiết), tùy chọn lễ/sự kiện, slider λ rồi **Chạy tối ưu**.")
+            st.info(
+                "Chọn nhóm bắt buộc (ngày, mùa, thời tiết), tùy chọn lễ/sự kiện, "
+                "mức Pareto (1–20) rồi **Chạy tối ưu**."
+            )
         return
 
     with st.spinner("Đang dự báo demand & tối ưu…"):
