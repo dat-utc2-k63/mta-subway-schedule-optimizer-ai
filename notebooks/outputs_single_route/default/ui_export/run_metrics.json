@@ -1,0 +1,176 @@
+{
+  "exported_at": "2026-06-14T03:24:38.802644+00:00",
+  "out_dir": "outputs_single_route\\default",
+  "lambda_used": {
+    "weekday_peak": 1240.5501811597987,
+    "weekend": 654.8821479840727,
+    "rainy_day": 1536.5314394537777
+  },
+  "bound_status": {
+    "weekday_peak": {
+      "at_min_pct": 8.333333333333332,
+      "at_max_pct": 22.916666666666664,
+      "interior_pct": 68.75,
+      "peak_interior_pct": 75.0,
+      "ok_total_interior": true,
+      "ok_peak_interior": true
+    },
+    "weekend": {
+      "at_min_pct": 0.0,
+      "at_max_pct": 54.166666666666664,
+      "interior_pct": 45.833333333333336,
+      "peak_interior_pct": 66.66666666666667,
+      "ok_total_interior": false,
+      "ok_peak_interior": true
+    },
+    "rainy_day": {
+      "at_min_pct": 8.333333333333332,
+      "at_max_pct": 10.416666666666668,
+      "interior_pct": 81.25,
+      "peak_interior_pct": 75.0,
+      "ok_total_interior": true,
+      "ok_peak_interior": true
+    }
+  },
+  "bound_by_hour": {
+    "weekday_peak": [
+      {
+        "hour_group": "peak",
+        "n_slots": 12,
+        "at_min_pct": 0.0,
+        "at_max_pct": 25.0,
+        "interior_pct": 75.0
+      },
+      {
+        "hour_group": "overnight",
+        "n_slots": 16,
+        "at_min_pct": 25.0,
+        "at_max_pct": 0.0,
+        "interior_pct": 75.0
+      },
+      {
+        "hour_group": "off_peak",
+        "n_slots": 20,
+        "at_min_pct": 0.0,
+        "at_max_pct": 40.0,
+        "interior_pct": 60.0
+      }
+    ],
+    "weekend": [
+      {
+        "hour_group": "peak",
+        "n_slots": 12,
+        "at_min_pct": 0.0,
+        "at_max_pct": 33.33333333333333,
+        "interior_pct": 66.66666666666667
+      },
+      {
+        "hour_group": "overnight",
+        "n_slots": 16,
+        "at_min_pct": 0.0,
+        "at_max_pct": 37.5,
+        "interior_pct": 62.5
+      },
+      {
+        "hour_group": "off_peak",
+        "n_slots": 20,
+        "at_min_pct": 0.0,
+        "at_max_pct": 80.0,
+        "interior_pct": 20.0
+      }
+    ],
+    "rainy_day": [
+      {
+        "hour_group": "peak",
+        "n_slots": 12,
+        "at_min_pct": 0.0,
+        "at_max_pct": 25.0,
+        "interior_pct": 75.0
+      },
+      {
+        "hour_group": "overnight",
+        "n_slots": 16,
+        "at_min_pct": 25.0,
+        "at_max_pct": 0.0,
+        "interior_pct": 75.0
+      },
+      {
+        "hour_group": "off_peak",
+        "n_slots": 20,
+        "at_min_pct": 0.0,
+        "at_max_pct": 10.0,
+        "interior_pct": 90.0
+      }
+    ]
+  },
+  "optimized": {
+    "weekday_peak": {
+      "total_passenger_min_wait": 687819.9848002391,
+      "weighted_avg_wait_min": 2.2294559942793297,
+      "total_fleet_cost": 79050.0,
+      "total_trips": 527.0,
+      "headway_std": 7.800640789013653,
+      "objective": 766869.9848002391,
+      "lambda_cost": 150.0
+    },
+    "weekend": {
+      "total_passenger_min_wait": 455410.4654651385,
+      "weighted_avg_wait_min": 2.2273732825701207,
+      "total_fleet_cost": 83550.0,
+      "total_trips": 557.0,
+      "headway_std": 3.891303864615402,
+      "objective": 538960.4654651384,
+      "lambda_cost": 150.0
+    },
+    "rainy_day": {
+      "total_passenger_min_wait": 782993.4181656588,
+      "weighted_avg_wait_min": 2.3484105537279025,
+      "total_fleet_cost": 74250.0,
+      "total_trips": 495.0,
+      "headway_std": 7.807698315338385,
+      "objective": 857243.4181656588,
+      "lambda_cost": 150.0
+    }
+  },
+  "baseline": {
+    "weekday_peak": {
+      "total_passenger_min_wait": 800818.6674223808,
+      "weighted_avg_wait_min": 2.5957227441336057,
+      "total_fleet_cost": 69300.0,
+      "total_trips": 462.0,
+      "headway_std": 5.902140475526006,
+      "objective": 870118.6674223808,
+      "lambda_cost": 150.0
+    },
+    "weekend": {
+      "total_passenger_min_wait": 572830.1701628896,
+      "weighted_avg_wait_min": 2.801662924385708,
+      "total_fleet_cost": 69300.0,
+      "total_trips": 462.0,
+      "headway_std": 5.902140475526006,
+      "objective": 642130.1701628896,
+      "lambda_cost": 150.0
+    },
+    "rainy_day": {
+      "total_passenger_min_wait": 856327.1063067666,
+      "weighted_avg_wait_min": 2.5683582610506885,
+      "total_fleet_cost": 69300.0,
+      "total_trips": 462.0,
+      "headway_std": 5.902140475526006,
+      "objective": 925627.1063067666,
+      "lambda_cost": 150.0
+    }
+  },
+  "pareto_knee": {
+    "lambda_equiv": 699.0,
+    "f1": 622281.8476182838,
+    "f2": 88800.0,
+    "total_trips": 592.0,
+    "w": 0.7736842105263158,
+    "chebyshev": 7162.894736842107,
+    "f1_improve_pct": 22.294287966433,
+    "f2_delta_pct": 28.13852813852814,
+    "z_star_f1": 613588.6703782907,
+    "z_star_f2": 57150.0
+  }
+}
