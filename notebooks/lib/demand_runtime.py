@@ -15,18 +15,17 @@ from . import single_route_pipeline as srp
 
 DEFAULT_UI_DIR = Path(__file__).resolve().parents[1] / "outputs" / "default" / "ui_export"
 
-# Map factors_daily.csv → hourly model columns (same day, hour-dependent flags below).
+# Map factors_daily.csv → hourly model columns (same day; no peak/overnight flags in train).
 _DAILY_TO_HOURLY = {
-    "temperature_c": lambda d, h: (float(d.get("temp_max_c", 0)) + float(d.get("temp_min_c", 0))) / 2.0,
+    "temperature_c": lambda d, h: (float(d.get("temp_max_c", 15)) + float(d.get("temp_min_c", 10))) / 2.0,
     "apparent_temperature_c": lambda d, h: (
-        float(d.get("apparent_temp_max_c", 0)) + float(d.get("apparent_temp_min_c", 0))
-    )
-    / 2.0,
+        float(d.get("apparent_temp_max_c", 14)) + float(d.get("apparent_temp_min_c", 9))
+    ) / 2.0,
     "precipitation_mm": lambda d, h: float(d.get("precipitation_mm", 0)),
     "rain_mm": lambda d, h: float(d.get("rain_mm", 0)),
     "snowfall_cm": lambda d, h: float(d.get("snowfall_cm", 0)),
-    "windspeed_kmh": lambda d, h: float(d.get("wind_max_kmh", 0)),
-    "windgusts_kmh": lambda d, h: float(d.get("wind_max_kmh", 0)) * 1.25,
+    "windspeed_kmh": lambda d, h: float(d.get("wind_max_kmh", 0)) * 0.7,
+    "windgusts_kmh": lambda d, h: float(d.get("wind_max_kmh", 0)),
     "is_rain": lambda d, h: int(d.get("is_rainy_day", 0)),
     "is_snow": lambda d, h: int(d.get("is_snowy_day", 0)),
     "is_severe_wind": lambda d, h: int(float(d.get("wind_max_kmh", 0)) >= 50),
@@ -34,22 +33,10 @@ _DAILY_TO_HOURLY = {
 }
 
 
-def hourly_factor_flags(hour: int) -> dict[str, int]:
-    return {
-        "is_peak_morning": int(hour in (7, 8, 9)),
-        "is_peak_evening": int(hour in (17, 18, 19)),
-        "is_overnight": int(hour <= 5 or hour >= 23),
-    }
-
-
 def daily_factors_to_hourly(daily: dict[str, Any] | pd.Series, hour: int) -> dict[str, float | int]:
     """Chuyển một dòng factors_daily → cột thời tiết theo giờ (HOURLY_FACTOR_COLS)."""
     d = dict(daily)
-    out: dict[str, float | int] = {}
-    for col, fn in _DAILY_TO_HOURLY.items():
-        out[col] = fn(d, hour)
-    out.update(hourly_factor_flags(hour))
-    return out
+    return {col: fn(d, hour) for col, fn in _DAILY_TO_HOURLY.items()}
 
 
 def load_factors_hourly_for_date(path: Path | str, date: str | pd.Timestamp) -> pd.DataFrame:
@@ -138,12 +125,10 @@ class DemandPredictor:
                     row.update(weather_by_hour[hour])
                 elif uniform_weather is not None:
                     row.update(uniform_weather)
-                    row.update(hourly_factor_flags(hour))
                 rows.append(row)
 
         feat = pd.DataFrame(rows)
         feat = srp.add_cyclical_time_features(feat)
-        feat = srp.add_weather_interaction_features(feat)
         if self.use_lag_features:
             for i, r in feat.iterrows():
                 defaults = self.lag_feature_defaults.get(
@@ -305,8 +290,8 @@ def _load_legacy_bundle(root: Path) -> dict[str, Any]:
             feature_medians = {k: float(v) for k, v in json.load(f).items()}
     skip = {
         "hour_sin", "hour_cos", "dow_sin", "dow_cos", "month_sin", "month_cos",
-        "is_weekend", "is_us_holiday", "log_baseline", "log_rain_mm", "log_precip_mm",
-        "rain_x_peak", "wind_x_rain", "log_lag_24h", "log_lag_168h", "log_rolling_7d",
+        "is_weekend", "is_us_holiday", "log_baseline",
+        "log_lag_24h", "log_lag_168h", "log_rolling_7d",
     }
     return {
         "scaler": scaler,
