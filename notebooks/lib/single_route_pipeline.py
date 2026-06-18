@@ -244,6 +244,7 @@ def build_dynamic_bounds(
     offpeak_factor: float = 1.35,
     overnight_factor: float = 1.10,
     min_factor: float = 0.5,
+    overnight_min_factor: float | None = None,
     max_delta: int = 3,
     absolute_max: int = 60,
     min_trips: int = 2,
@@ -257,7 +258,12 @@ def build_dynamic_bounds(
     factors[is_peak] = float(peak_factor)
     factors[is_overnight] = float(overnight_factor)
 
-    trips_min = np.maximum(min_trips, np.floor(base * min_factor)).astype(int)
+    ovn_min = float(overnight_min_factor if overnight_min_factor is not None else min_factor)
+    min_factors = np.full(len(base), float(min_factor))
+    min_factors[is_overnight] = ovn_min
+    min_trips_arr = np.where(is_overnight, 1, int(min_trips))
+
+    trips_min = np.maximum(min_trips_arr, np.floor(base * min_factors)).astype(int)
     trips_max = np.minimum(absolute_max, np.floor(base * factors)).astype(int)
     trips_max = np.maximum(trips_max, base.astype(int) + int(max_delta))
     return trips_min, trips_max
@@ -1428,6 +1434,100 @@ def merge_trip_bounds(
     return tmin, tmax
 
 
+def build_headway_trip_bounds_by_slot(
+    slot_hour: np.ndarray,
+    *,
+    min_headway_min: float = 3.0,
+    max_headway_min: float = 20.0,
+    overnight_max_headway_min: float | None = None,
+    min_trips: int = 1,
+    absolute_max: int = 60,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Headway bounds per slot; overnight có thể nới MAX_HEADWAY (sàn chuyến thấp hơn)."""
+    hrs = np.asarray(slot_hour, dtype=int)
+    is_overnight = (hrs <= 6) | (hrs >= 23)
+    ovn_hw = float(overnight_max_headway_min if overnight_max_headway_min is not None else max_headway_min)
+    max_hw = np.where(is_overnight, ovn_hw, float(max_headway_min))
+    min_hw = max(float(min_headway_min), 1e-6)
+    t_max_slot = np.minimum(int(absolute_max), np.floor(60.0 / min_hw).astype(int))
+    t_min_slot = np.maximum(int(min_trips), np.ceil(60.0 / np.maximum(max_hw, 1e-6)).astype(int))
+    return t_min_slot.astype(int), np.full(len(hrs), t_max_slot, dtype=int)
+
+
+def compute_merged_trip_bounds(
+    baseline_trips: np.ndarray,
+    slot_hour: np.ndarray,
+    *,
+    peak_factor: float = 1.22,
+    offpeak_factor: float = 1.35,
+    overnight_factor: float = 1.10,
+    min_factor: float = 0.5,
+    overnight_min_factor: float | None = None,
+    max_delta: int = 3,
+    min_headway_min: float = 3.0,
+    max_headway_min: float = 20.0,
+    overnight_max_headway_min: float | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Dynamic baseline bounds ∩ headway bounds (một nguồn sự thật cho §5)."""
+    dyn_min, dyn_max = build_dynamic_bounds(
+        baseline_trips,
+        slot_hour,
+        peak_factor=peak_factor,
+        offpeak_factor=offpeak_factor,
+        overnight_factor=overnight_factor,
+        min_factor=min_factor,
+        overnight_min_factor=overnight_min_factor,
+        max_delta=max_delta,
+    )
+    if overnight_max_headway_min is not None:
+        hw_min, hw_max = build_headway_trip_bounds_by_slot(
+            slot_hour,
+            min_headway_min=min_headway_min,
+            max_headway_min=max_headway_min,
+            overnight_max_headway_min=overnight_max_headway_min,
+        )
+    else:
+        hw_min, hw_max = build_headway_trip_bounds(
+            slot_hour,
+            min_headway_min=min_headway_min,
+            max_headway_min=max_headway_min,
+        )
+    return merge_trip_bounds(dyn_min, dyn_max, hw_min, hw_max)
+
+
+def trips_bounds_for_scenario(
+    baseline_trips: np.ndarray,
+    slot_hour: np.ndarray,
+    trips_min: np.ndarray,
+    trips_max: np.ndarray,
+    scenario: str,
+    *,
+    rainy_peak_hours: tuple[int, ...] = (),
+    rainy_peak_min_factor: float = 0.65,
+    trips_min_factor: float = 0.5,
+    rainy_offpeak_max_factor: float | None = None,
+    peak_hours: tuple[int, ...] = (7, 8, 9, 17, 18, 19),
+) -> tuple[np.ndarray, np.ndarray]:
+    """Per-scenario TRIPS_MIN/TRIPS_MAX (rainy peak floor, rainy off-peak ceiling)."""
+    tmin = np.asarray(trips_min, dtype=int).copy()
+    tmax = np.asarray(trips_max, dtype=int).copy()
+    hrs = np.asarray(slot_hour, dtype=int)
+    base = np.asarray(baseline_trips, dtype=float)
+    if scenario == "rainy_day":
+        if rainy_peak_hours and rainy_peak_min_factor > trips_min_factor:
+            rainy_peak = np.isin(hrs, rainy_peak_hours)
+            boosted_min = np.ceil(base[rainy_peak] * rainy_peak_min_factor).astype(int)
+            tmin[rainy_peak] = np.maximum(tmin[rainy_peak], boosted_min)
+        if rainy_offpeak_max_factor is not None:
+            is_peak = np.isin(hrs, peak_hours)
+            is_overnight = (hrs <= 6) | (hrs >= 23)
+            rainy_off = ~(is_peak | is_overnight)
+            boosted_max = np.floor(base[rainy_off] * float(rainy_offpeak_max_factor)).astype(int)
+            tmax[rainy_off] = np.maximum(tmax[rainy_off], boosted_max)
+            tmax = np.maximum(tmax, tmin)
+    return tmin, tmax
+
+
 def compute_fleet_limits_from_baseline(
     baseline_trips: np.ndarray,
     slot_route: np.ndarray,
@@ -1865,6 +1965,154 @@ def build_demand_model(
     return model
 
 
+def _normalize_date_set(dates: set | list | np.ndarray | pd.Series) -> set[pd.Timestamp]:
+    """Chuẩn hóa tập ngày về midnight Timestamp (so khớp merge route×date×hour)."""
+    if not dates:
+        return set()
+    return set(pd.to_datetime(pd.Series(list(dates))).dt.normalize())
+
+
+def prepare_lstm_sequences(
+    df: pd.DataFrame,
+    seq_len: int,
+    feature_cols: list[str],
+    target_col: str,
+    *,
+    train_dates: set | list | np.ndarray | pd.Series | None = None,
+    val_dates: set | list | np.ndarray | pd.Series | None = None,
+    test_dates: set | list | np.ndarray | pd.Series | None = None,
+    target_split: str = "train",
+    meta_cols: list[str] | None = None,
+    route_col: str = "route_id",
+    date_col: str = "date",
+    hour_col: str = "hour",
+) -> tuple[np.ndarray, np.ndarray, pd.DataFrame, dict[str, Any]]:
+    """Tạo chuỗi LSTM theo route: mỗi mẫu = seq_len giờ trước → dự báo residual tại giờ hiện tại.
+
+    Trả về X (n, seq_len, n_features), y (n,), meta (route/date/hour), stats.
+    """
+    split_map = {
+        "train": _normalize_date_set(train_dates or set()),
+        "val": _normalize_date_set(val_dates or set()),
+        "test": _normalize_date_set(test_dates or set()),
+    }
+    if target_split not in split_map:
+        raise ValueError(f"target_split phải là train|val|test, nhận {target_split!r}")
+    target_dates = split_map[target_split]
+    if not target_dates:
+        raise ValueError(f"Không có ngày cho split {target_split!r}")
+
+    def _in_target_dates(d: Any) -> bool:
+        return pd.Timestamp(d).normalize() in target_dates
+
+    missing = [c for c in feature_cols + [target_col, route_col, date_col, hour_col] if c not in df.columns]
+    if missing:
+        raise KeyError(f"Thiếu cột trong df: {missing}")
+
+    work = df.copy()
+    work[date_col] = pd.to_datetime(work[date_col]).dt.normalize()
+    work = work.sort_values([route_col, date_col, hour_col]).reset_index(drop=True)
+
+    meta_default = [route_col, date_col, hour_col]
+    meta_keep = meta_default if meta_cols is None else list(dict.fromkeys(meta_default + list(meta_cols)))
+
+    feat_arr = work[feature_cols].to_numpy(dtype=np.float32)
+    target_arr = work[target_col].to_numpy(dtype=np.float32)
+    dates_arr = work[date_col].to_numpy()
+    routes_arr = work[route_col].to_numpy()
+
+    xs: list[np.ndarray] = []
+    ys: list[float] = []
+    meta_rows: list[dict[str, Any]] = []
+    skipped_short = 0
+    skipped_nan = 0
+    skipped_split = 0
+
+    for route in work[route_col].unique():
+        idx = np.flatnonzero(routes_arr == route)
+        if len(idx) < seq_len + 1:
+            skipped_short += len(idx)
+            continue
+        for pos in range(seq_len, len(idx)):
+            i = int(idx[pos])
+            if not _in_target_dates(dates_arr[i]):
+                skipped_split += 1
+                continue
+            window = feat_arr[idx[pos - seq_len] : idx[pos]]
+            if window.shape[0] != seq_len:
+                skipped_short += 1
+                continue
+            y_val = float(target_arr[i])
+            if np.isnan(window).any() or np.isnan(y_val):
+                skipped_nan += 1
+                continue
+            xs.append(window)
+            ys.append(y_val)
+            meta_rows.append({c: work.iloc[i][c] for c in meta_keep})
+
+    if not xs:
+        raise ValueError(
+            f"Không tạo được chuỗi LSTM cho split={target_split!r} "
+            f"(seq_len={seq_len}, skipped_short={skipped_short}, skipped_nan={skipped_nan})"
+        )
+
+    X = np.stack(xs, axis=0).astype(np.float32)
+    y = np.asarray(ys, dtype=np.float32)
+    meta = pd.DataFrame(meta_rows).reset_index(drop=True)
+    stats = {
+        "split": target_split,
+        "n_samples": int(len(y)),
+        "seq_len": int(seq_len),
+        "n_features": len(feature_cols),
+        "n_routes": int(work[route_col].nunique()),
+        "skipped_short_history": int(skipped_short),
+        "skipped_nan": int(skipped_nan),
+        "skipped_wrong_split": int(skipped_split),
+    }
+    return X, y, meta, stats
+
+
+def build_lstm_demand_model(
+    seq_len: int,
+    n_features: int,
+    *,
+    hidden_units: int = 64,
+    num_lstm_layers: int = 2,
+    dropout: float = 0.25,
+    use_batch_norm: bool = True,
+) -> Model:
+    """LSTM residual log-demand (Huber) — 2-layer LSTM theo ITM 2026 MTA paper."""
+    _ = seq_len  # documented for callers; shape fixed via Input
+    inp = Input(shape=(seq_len, n_features), name="lstm_sequence")
+    x = inp
+    for i in range(int(num_lstm_layers)):
+        x = layers.LSTM(
+            int(hidden_units),
+            return_sequences=i < int(num_lstm_layers) - 1,
+            name=f"lstm_{i}",
+            dropout=float(dropout) if dropout > 0 else 0.0,
+        )(x)
+    if use_batch_norm:
+        x = layers.BatchNormalization(name="bn_lstm")(x)
+    head_units = max(int(hidden_units) // 2, 16)
+    x = layers.Dense(
+        head_units,
+        activation="relu",
+        kernel_regularizer=tf.keras.regularizers.l2(5e-3),
+        name="dense_head",
+    )(x)
+    if dropout > 0:
+        x = layers.Dropout(float(dropout), name="dropout_head")(x)
+    out = layers.Dense(1, name="residual_log_demand", kernel_initializer="zeros")(x)
+    model = Model(inp, out)
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(3e-4),
+        loss=tf.keras.losses.Huber(delta=0.5),
+        metrics=["mae"],
+    )
+    return model
+
+
 def fit_histgbm_demand(
     X_train: np.ndarray,
     y_train: np.ndarray,
@@ -1970,6 +2218,27 @@ def predict_quantile_gbm(
     if 0.75 in models:
         out["p75"] = models[0.75].predict(X)
     return out
+
+
+def demand_from_quantile_gbm(
+    quantile_models: dict[float, Any],
+    X_num: np.ndarray,
+    log_baseline: np.ndarray,
+    *,
+    quantile: float = 0.75,
+    resid_clip: tuple[float, float] = (-0.55, 0.55),
+) -> np.ndarray:
+    """Demand conservative từ quantile GBM residual (vd. p75 cho scenario mưa/cực đoan)."""
+    preds = predict_quantile_gbm(quantile_models, X_num)
+    qk = f"q{int(round(float(quantile) * 100)):02d}"
+    if qk in preds:
+        resid = preds[qk]
+    elif float(quantile) in quantile_models:
+        resid = quantile_models[float(quantile)].predict(X_num)
+    else:
+        resid = preds.get("median", preds.get("q50", next(iter(preds.values()))))
+    resid = np.clip(np.asarray(resid, dtype=float).reshape(-1), *resid_clip)
+    return residuals_to_demand(log_baseline, resid, resid_clip)
 
 
 def residual_interval_to_demand(
