@@ -241,13 +241,13 @@ def build_demand_headway_chart(hourly: pd.DataFrame) -> go.Figure:
 
 
 def render_pareto_selector() -> tuple[int, float]:
-    """Ưu tiên chờ ↔ chi phí — 3 vùng + 8 điểm λ curated."""
+    """Ưu tiên chờ ↔ chi phí — 3 vùng, 7 mức λ (≥ 264)."""
     zone_labels = [PARETO_ZONES[z]["label_vi"] for z in PARETO_ZONE_ORDER]
     zone = st.radio(
-        "Vùng Pareto",
+        "Ưu tiên chờ hay chi phí",
         zone_labels,
         index=0,
-        help="Frontier weekday_peak — 8 điểm λ đều, lồi tốt.",
+        help="Chọn vùng phù hợp mục tiêu vận hành; mức khuyến nghị nằm trong vùng Cân bằng.",
     )
     zone_key = next(k for k in PARETO_ZONE_ORDER if PARETO_ZONES[k]["label_vi"] == zone)
     zconf = PARETO_ZONES[zone_key]
@@ -256,26 +256,17 @@ def render_pareto_selector() -> tuple[int, float]:
     default_idx = lambdas.index(default_lam) if default_lam in lambdas else 0
 
     lambda_cost = st.selectbox(
-        "Mức λ",
+        "Mức chi tiết",
         lambdas,
         index=default_idx,
         format_func=pareto_compact_label,
     )
     st.caption(zconf["hint"])
 
-    with st.expander("λ=211 — vùng diminishing returns (không khuyến nghị)", expanded=False):
-        st.caption(PARETO_ZONES["avoid"]["hint"])
-        use_avoid = st.checkbox("Dùng λ=211 dù biết rủi ro", value=False)
-        if use_avoid:
-            lambda_cost = 211.0
-            st.warning(
-                "λ=211: tỉ lệ lợi/chi tệ nhất trên frontier — chỉ dùng khi cần thử nghiệm."
-            )
-
     pareto_index = lambda_to_pareto_index(lambda_cost)
     p = pareto_point_for_lambda(lambda_cost)
-    if p and p.tag == "Knee":
-        st.caption("✓ Điểm knee — khuyến nghị mặc định.")
+    if p and p.tag == "Khuyến nghị":
+        st.caption("✓ Mức khuyến nghị mặc định.")
     st.markdown(priority_pill(lambda_cost), unsafe_allow_html=True)
     return pareto_index, float(lambda_cost)
 
@@ -294,34 +285,66 @@ def apply_manual_weather(hourly: pd.DataFrame, manual: dict[str, float | int] | 
     return out
 
 
-def render_constraint_panel(ui_config: dict) -> dict:
-    """Sidebar panel — defaults from ui_config.json."""
+def render_system_fleet_setting(ui_config: dict) -> dict[str, float | bool]:
+    """Giới hạn fleet toàn mạng — độc lập với tuyến đang xem."""
+    default_cap = float(ui_config["max_system_fleet"])
+    st.markdown("**Toàn mạng subway**")
+    use_cap = st.checkbox(
+        "Bật giới hạn số xe chạy đồng thời",
+        value=True,
+        help="Ràng buộc áp dụng cho toàn hệ thống, không chỉ tuyến đang chọn.",
+    )
+    cap = st.number_input(
+        "Số xe tối đa (toàn mạng)",
+        value=default_cap,
+        min_value=1.0,
+        step=10.0,
+        disabled=not use_cap,
+        help=f"Mặc định từ model: {default_cap:.0f} xe.",
+    )
+    return {"max_system_fleet": float(cap), "use_system_fleet": use_cap}
+
+
+_OPT_TARGET_VI: dict[str, str] = {
+    "objective": "Tổng hợp (chờ + chi phí)",
+    "wait": "Ưu tiên giảm thời gian chờ",
+    "cost": "Ưu tiên giảm chi phí",
+}
+_OPT_TARGET_KEYS = list(_OPT_TARGET_VI.keys())
+
+
+def render_constraint_panel(ui_config: dict, *, max_system_fleet: float, use_system_fleet: bool) -> dict:
+    """Ràng buộc nâng cao — nhãn tiếng Việt; fleet toàn mạng đặt ngoài panel."""
     defaults = default_constraint_panel(ui_config)
+    defaults["max_system_fleet"] = max_system_fleet
+    defaults["use_system_fleet"] = use_system_fleet
     with st.expander("Ràng buộc nâng cao (tuỳ chọn)", expanded=False):
         enabled = st.checkbox("Bật tùy chỉnh ràng buộc", value=False)
         if not enabled:
             return defaults
         c1, c2 = st.columns(2)
         with c1:
-            use_route_fleet = st.checkbox("Fleet theo tuyến", value=defaults["use_route_fleet"])
-            use_system_fleet = st.checkbox("Fleet toàn hệ", value=defaults["use_system_fleet"])
+            use_route_fleet = st.checkbox(
+                "Giới hạn xe theo tuyến",
+                value=defaults["use_route_fleet"],
+            )
+            use_capacity = st.checkbox(
+                "Đảm bảo đủ chỗ ngồi",
+                value=defaults["use_capacity"],
+            )
         with c2:
-            use_capacity = st.checkbox("Sàn sức chứa", value=defaults["use_capacity"])
-            use_smoothness = st.checkbox("Mượt theo giờ", value=defaults["use_smoothness"])
-        max_system_fleet = st.number_input(
-            "max_system_fleet",
-            value=float(defaults["max_system_fleet"]),
-            min_value=1.0,
-            step=10.0,
-        )
+            use_smoothness = st.checkbox(
+                "Lịch mượt theo giờ",
+                value=defaults["use_smoothness"],
+            )
         capacity_per_trip = st.number_input(
-            "capacity_per_trip",
+            "Sức chứa mỗi chuyến (hành khách)",
             value=float(defaults["capacity_per_trip"]),
             min_value=1.0,
             step=50.0,
         )
         smoothness = st.slider(
-            "smoothness_max_delta",
+            "Độ mượt lịch (chênh lệch chuyến tối đa/giờ)",
             1,
             10,
             int(defaults["smoothness_max_delta"]),
@@ -329,32 +352,45 @@ def render_constraint_panel(ui_config: dict) -> dict:
         hw1, hw2 = st.columns(2)
         with hw1:
             min_headway = st.number_input(
-                "min_headway_min",
+                "Headway tối thiểu (phút)",
                 value=float(defaults["min_headway_min"]),
                 min_value=1.0,
                 step=0.5,
             )
         with hw2:
             max_headway = st.number_input(
-                "max_headway_min",
+                "Headway tối đa (phút)",
                 value=float(defaults["max_headway_min"]),
                 min_value=2.0,
                 step=1.0,
             )
-        st.caption("Factor chuyến theo nhóm giờ")
+        st.caption("Hệ số số chuyến tối đa theo khung giờ")
         f1, f2, f3 = st.columns(3)
         with f1:
-            peak_f = st.number_input("peak max", value=float(defaults["trips_peak_max_factor"]), step=0.05)
+            peak_f = st.number_input(
+                "Cao điểm",
+                value=float(defaults["trips_peak_max_factor"]),
+                step=0.05,
+            )
         with f2:
-            off_f = st.number_input("off-peak max", value=float(defaults["trips_offpeak_max_factor"]), step=0.05)
+            off_f = st.number_input(
+                "Ngoài cao điểm",
+                value=float(defaults["trips_offpeak_max_factor"]),
+                step=0.05,
+            )
         with f3:
-            ovn_f = st.number_input("overnight max", value=float(defaults["trips_overnight_max_factor"]), step=0.05)
-        opt_target = st.selectbox(
-            "opt_target",
-            ["objective", "wait", "cost"],
-            index=["objective", "wait", "cost"].index(str(defaults["opt_target"])),
+            ovn_f = st.number_input(
+                "Đêm khuya",
+                value=float(defaults["trips_overnight_max_factor"]),
+                step=0.05,
+            )
+        opt_key = st.selectbox(
+            "Mục tiêu tối ưu",
+            _OPT_TARGET_KEYS,
+            index=_OPT_TARGET_KEYS.index(str(defaults["opt_target"])),
+            format_func=lambda k: _OPT_TARGET_VI[k],
         )
-        if st.button("Reset về mặc định", use_container_width=True):
+        if st.button("Đặt lại mặc định", use_container_width=True):
             st.rerun()
         return {
             **defaults,
@@ -370,7 +406,7 @@ def render_constraint_panel(ui_config: dict) -> dict:
             "trips_peak_max_factor": peak_f,
             "trips_offpeak_max_factor": off_f,
             "trips_overnight_max_factor": ovn_f,
-            "opt_target": opt_target,
+            "opt_target": opt_key,
         }
 
 
@@ -591,11 +627,12 @@ def main() -> None:
     st.markdown('<p class="hero-title">MTA · Tối ưu lịch trình</p>', unsafe_allow_html=True)
 
     with st.sidebar:
-        route_id = st.selectbox("Tuyến", routes, index=routes.index("1") if "1" in routes else 0)
-
+        fleet_settings = render_system_fleet_setting(ui_config)
         st.markdown("---")
         _, lambda_cost = render_pareto_selector()
         st.markdown("---")
+
+        route_id = st.selectbox("Tuyến cần xem", routes, index=routes.index("1") if "1" in routes else 0)
 
         input_mode = st.radio(
             "Nguồn demand",
@@ -672,7 +709,11 @@ def main() -> None:
             )
 
         st.markdown("---")
-        constraint_panel = render_constraint_panel(ui_config)
+        constraint_panel = render_constraint_panel(
+            ui_config,
+            max_system_fleet=fleet_settings["max_system_fleet"],
+            use_system_fleet=bool(fleet_settings["use_system_fleet"]),
+        )
 
         manual_weather: dict[str, float | int] | None = None
         with st.expander("Tuỳ chỉnh thủ công (nâng cao)", expanded=False):

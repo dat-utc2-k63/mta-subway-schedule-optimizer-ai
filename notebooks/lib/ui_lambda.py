@@ -8,60 +8,45 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-# 8 điểm UI — lấy từ pareto_frontier.csv (frontier lồi, không khúc gãy)
-PARETO_UI_LAMBDAS: tuple[float, ...] = (211.0, 264.0, 384.0, 602.0, 753.0, 1017.0, 1273.0, 1479.0)
+# 7 điểm UI (λ ≥ 264) — lấy từ pareto_frontier.csv
+PARETO_UI_LAMBDAS: tuple[float, ...] = (264.0, 384.0, 602.0, 753.0, 1017.0, 1273.0, 1479.0)
 
 LAMBDA_KNEE = 384.0
 LAMBDA_BALANCED = LAMBDA_KNEE
 LAMBDA_DEFAULT = LAMBDA_BALANCED
-LAMBDA_WAIT = 211.0  # thấp nhất trên frontier UI (chỉ dùng tham chiếu wait-focus)
+LAMBDA_WAIT = 264.0  # thấp nhất trên frontier UI (tham chiếu wait-focus)
 LAMBDA_COST = 1479.0
-LAMBDA_AVOID_BELOW = 264.0  # λ < 264: diminishing returns
+LAMBDA_MIN_UI = 264.0
 
 PARETO_COUNT = len(PARETO_UI_LAMBDAS)
 
-# Vùng dùng được trên frontier (theo phân tích trade-off)
 PARETO_ZONE_ORDER: tuple[str, ...] = ("recommended", "fleet_save", "min_cost")
 
 PARETO_ZONES: dict[str, dict[str, Any]] = {
-    "avoid": {
-        "label_vi": "Tránh (diminishing returns)",
-        "lambdas": (211.0,),
-        "hint": (
-            "λ < 264: trả thêm ~4.4 điểm % chi phí chỉ để mua thêm ~0.75 điểm % cải thiện chờ "
-            "so với knee (384) — tỉ lệ lợi/chi < 0.2."
-        ),
-    },
     "recommended": {
-        "label_vi": "Nên dùng",
+        "label_vi": "Cân bằng (khuyến nghị)",
         "lambdas": (264.0, 384.0),
         "default": 384.0,
-        "hint": (
-            "λ ≈ 330–481: đạt ~26.5–27.2% cải thiện chờ (gần max ~27.8% trên frontier). "
-            "λ=384 (knee) là lựa chọn khuyến nghị."
-        ),
+        "hint": "Gần mức cải thiện chờ tối đa (~27%). Mặc định: mức khuyến nghị (384).",
     },
     "fleet_save": {
-        "label_vi": "Tiết kiệm fleet",
+        "label_vi": "Tiết kiệm xe",
         "lambdas": (602.0, 753.0),
         "default": 602.0,
-        "hint": (
-            "λ ≈ 600–760: mất ~1.5–2.5 điểm % cải thiện chờ so với knee để giảm 5–8 điểm % chi phí. "
-            "Phù hợp khi cần cắt ngân sách fleet."
-        ),
+        "hint": "Giảm 5–8% chi phí fleet, đổi lại mất ~1.5–2.5% cải thiện chờ so với mức khuyến nghị.",
     },
     "min_cost": {
-        "label_vi": "Chi phí thấp",
+        "label_vi": "Chi phí thấp nhất",
         "lambdas": (1017.0, 1273.0, 1479.0),
         "default": 1017.0,
-        "hint": "Ưu tiên giảm fleet tối đa; cải thiện chờ giảm dần theo λ.",
+        "hint": "Ưu tiên cắt số chuyến / fleet; cải thiện chờ giảm dần.",
     },
 }
 
 PARETO_TAGS: dict[float, str] = {
-    211.0: "Diminishing returns",
-    384.0: "Knee",
-    1479.0: "Chi phí min",
+    264.0: "Thiên chờ",
+    384.0: "Khuyến nghị",
+    1479.0: "Tiết kiệm tối đa",
 }
 
 REFERENCE_DEMAND = 500.0
@@ -79,7 +64,6 @@ PRIORITY_VI: dict[str, str] = {
 }
 
 _EMBEDDED_PARETO: list[dict[str, float]] = [
-    {"lambda_equiv": 211, "w": 0.9, "f1_improve_pct": 27.77, "f2_delta_pct": 33.11, "total_trips": 10814},
     {"lambda_equiv": 264, "w": 0.858, "f1_improve_pct": 27.56, "f2_delta_pct": 31.60, "total_trips": 10691},
     {"lambda_equiv": 384, "w": 0.774, "f1_improve_pct": 27.02, "f2_delta_pct": 28.74, "total_trips": 10459},
     {"lambda_equiv": 602, "w": 0.563, "f1_improve_pct": 25.62, "f2_delta_pct": 23.97, "total_trips": 10071},
@@ -144,7 +128,7 @@ def _filter_ui_lambdas(rows: list[dict[str, float]]) -> list[dict[str, float]]:
 
 @lru_cache(maxsize=4)
 def load_pareto_points(csv_path: str | None = None) -> tuple[ParetoPoint, ...]:
-    """8 điểm Pareto curated — đọc CSV notebook rồi lọc theo PARETO_UI_LAMBDAS."""
+    """7 điểm Pareto curated (λ ≥ 264) — đọc CSV rồi lọc theo PARETO_UI_LAMBDAS."""
     rows: list[dict[str, float]] | None = None
     if csv_path:
         rows = _rows_from_csv(Path(csv_path))
@@ -166,7 +150,7 @@ def pareto_lambda_values(csv_path: str | None = None) -> list[float]:
 
 
 def lambda_to_pareto_index(lam: float, csv_path: str | None = None) -> int:
-    """Map λ → chỉ số 1..8 trên frontier UI."""
+    """Map λ → chỉ số 1..7 trên frontier UI."""
     for i, v in enumerate(pareto_lambda_values(csv_path), start=1):
         if abs(v - float(lam)) < 0.5:
             return i
@@ -204,15 +188,9 @@ def pareto_zone_for_lambda(lam: float) -> str:
     for key, z in PARETO_ZONES.items():
         if any(abs(lam - float(v)) < 0.5 for v in z["lambdas"]):
             return key
-    if lam < LAMBDA_AVOID_BELOW:
-        return "avoid"
     if lam <= 760:
         return "fleet_save" if lam >= 600 else "recommended"
     return "min_cost"
-
-
-def is_avoid_lambda(lam: float) -> bool:
-    return float(lam) < LAMBDA_AVOID_BELOW
 
 
 def pareto_short_label(index: int, csv_path: str | None = None) -> str:
@@ -238,15 +216,18 @@ def pareto_option_label(lam: float, csv_path: str | None = None) -> str:
 def pareto_compact_label(lam: float, csv_path: str | None = None) -> str:
     p = pareto_point_for_lambda(lam, csv_path)
     if p is None:
-        return f"λ={lam:.0f}"
-    tag = f" ({p.tag})" if p.tag else ""
-    return f"λ={p.lambda_equiv:.0f}{tag} · chờ −{p.f1_improve_pct:.1f}% · +chi phí {p.f2_delta_pct:.1f}%"
+        return f"Mức {lam:.0f}"
+    tag = f" — {p.tag}" if p.tag else ""
+    return (
+        f"Chờ giảm {p.f1_improve_pct:.1f}%{tag} · "
+        f"chi phí +{p.f2_delta_pct:.1f}% · ~{p.total_trips:.0f} chuyến/ngày"
+    )
 
 
 def lambda_priority(lam: float) -> str:
-    """Phân vùng theo 8 điểm curated (knee 384 ∈ Balanced)."""
-    if lam < LAMBDA_AVOID_BELOW:
-        return "Wait-focused"
+    """Phân vùng theo frontier curated (knee 384 ∈ Balanced)."""
+    if lam <= 384:
+        return "Balanced"
     if lam <= 753:
         return "Balanced"
     return "Cost-focused"

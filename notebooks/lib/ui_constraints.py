@@ -89,16 +89,16 @@ def validate_constraint_config(
     """Server-side validation before running optimizer."""
     if overrides.capacity_per_trip is not None and overrides.capacity_per_trip <= 0:
         raise ValidationError(
-            "capacity_per_trip phải > 0",
-            "Tăng sức chứa mỗi chuyến lên ít nhất 1.",
+            "Sức chứa mỗi chuyến phải > 0",
+            "Tăng số chỗ ngồi mỗi chuyến lên ít nhất 1.",
         )
 
     min_hw = overrides.min_headway_min
     max_hw = overrides.max_headway_min
     if min_hw is not None and max_hw is not None and min_hw >= max_hw:
         raise ValidationError(
-            f"min_headway_min ({min_hw}) phải nhỏ hơn max_headway_min ({max_hw})",
-            "Giảm min_headway hoặc tăng max_headway.",
+            f"Headway tối thiểu ({min_hw} phút) phải nhỏ hơn headway tối đa ({max_hw} phút)",
+            "Giảm headway tối thiểu hoặc tăng headway tối đa.",
         )
 
     slot_route = np.asarray(optimizer_state["slot_route"])
@@ -129,9 +129,9 @@ def validate_constraint_config(
         min_fleet = _min_system_fleet_required(fleet_df)
         if overrides.max_system_fleet < min_fleet * 0.5:
             raise ValidationError(
-                f"max_system_fleet ({overrides.max_system_fleet:.0f}) quá thấp so với "
+                f"Giới hạn xe toàn mạng ({overrides.max_system_fleet:.0f}) quá thấp so với "
                 f"fleet baseline tối thiểu (~{min_fleet:.0f})",
-                "Tăng max_system_fleet hoặc tắt use_system_fleet.",
+                "Tăng số xe tối đa hoặc tắt giới hạn toàn mạng.",
             )
 
 
