@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from . import single_route_pipeline as srp
+from .ui_constraints import ConstraintOverrides, apply_post_opt_constraints, compute_binding_stats
 from .ui_lambda import LAMBDA_BALANCED, LAMBDA_WAIT
 
 
@@ -174,6 +175,8 @@ def optimize_route_day(
     capacity_per_trip: float,
     is_weekend: int = 0,
     lambda_ref: float = LAMBDA_BALANCED,
+    constraint_overrides: ConstraintOverrides | None = None,
+    ui_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run analytical optimization for one route; return slot-level + hourly rollup."""
     slots = filter_route_slots(optimizer_state, route_id)
@@ -191,9 +194,13 @@ def optimize_route_day(
         trips_max=slots["trips_max"],
     )
 
+    lam = float(lambda_cost)
+    if constraint_overrides is not None and constraint_overrides.lambda_cost is not None:
+        lam = float(constraint_overrides.lambda_cost)
+
     opt_trips = optimize_schedule_analytical_anchored(
         slot_demand,
-        lambda_cost=lambda_cost,
+        lambda_cost=lam,
         **opt_kwargs,
     )
     wait_focus_trips = optimize_schedule_analytical_anchored(
@@ -201,6 +208,31 @@ def optimize_route_day(
         lambda_cost=LAMBDA_WAIT,
         **opt_kwargs,
     )
+
+    overrides = constraint_overrides or ConstraintOverrides()
+    cfg = ui_config or {}
+    slots_full = {**slots, "slot_route": np.full(n, str(route_id), dtype=object), "baseline_trips": baseline}
+    opt_trips = apply_post_opt_constraints(
+        opt_trips,
+        slot_demand,
+        slots_full,
+        overrides,
+        optimizer_state,
+        ui_config=cfg,
+    )
+
+    tmin, tmax = slots["trips_min"], slots["trips_max"]
+    if ui_config is not None and constraint_overrides is not None:
+        from .ui_constraints import recompute_trip_bounds
+
+        tmin, tmax = recompute_trip_bounds(
+            baseline.astype(float),
+            slots["slot_hour"],
+            overrides,
+            optimizer_state,
+            ui_config,
+        )
+    binding = compute_binding_stats(opt_trips, tmin, tmax, slots["slot_hour"])
 
     slot_route = np.full(n, str(route_id), dtype=object)
     base_metrics = srp.compute_wait_with_overflow(
@@ -282,4 +314,5 @@ def optimize_route_day(
         "overcrowding_optimized": overcrowding_risk_index(
             slot_demand, opt_trips, capacity_per_trip=capacity_per_trip, slot_hour=slots["slot_hour"]
         ),
+        "constraint_binding": binding,
     }

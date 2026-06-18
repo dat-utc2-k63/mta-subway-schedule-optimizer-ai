@@ -1813,6 +1813,157 @@ def add_cyclical_time_features(d: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def _minutes_to_hhmm(minutes: float) -> str:
+    m = int(round(float(minutes))) % (24 * 60)
+    h, mm = divmod(m, 60)
+    return f"{h:02d}:{mm:02d}"
+
+
+def load_gtfs_stop_offset_templates(
+    schedule_dir: Path,
+    *,
+    service_id: str = "Weekday",
+) -> pd.DataFrame:
+    """Median offset (phút) từ departure đầu trip → từng stop theo (route_id, direction_id).
+
+    Reuses cùng logic parse GTFS như compute_route_direction_cycle_times.
+  """
+    schedule_dir = Path(schedule_dir)
+    trips = pd.read_csv(
+        schedule_dir / "trips.txt",
+        dtype={"trip_id": str, "route_id": str, "service_id": str},
+    )
+    stop_times = pd.read_csv(
+        schedule_dir / "stop_times.txt",
+        dtype={"trip_id": str, "stop_id": str, "departure_time": str, "arrival_time": str},
+        usecols=lambda c: c
+        in {"trip_id", "stop_id", "stop_sequence", "departure_time", "arrival_time"},
+    )
+    stops_path = schedule_dir / "stops.txt"
+    stops = (
+        pd.read_csv(stops_path, dtype=str)
+        if stops_path.exists()
+        else pd.DataFrame(columns=["stop_id", "stop_name", "parent_station"])
+    )
+
+    cal_path = schedule_dir / "calendar.txt"
+    available_services = trips["service_id"].dropna().unique().tolist()
+    if cal_path.exists():
+        cal = pd.read_csv(cal_path, dtype={"service_id": str})
+        available_services = cal["service_id"].dropna().unique().tolist() or available_services
+    if service_id not in available_services and available_services:
+        service_id = available_services[0]
+
+    trips_f = trips[trips["service_id"] == service_id].copy()
+    if trips_f.empty:
+        trips_f = trips.copy()
+    if "direction_id" not in trips_f.columns:
+        trips_f["direction_id"] = 0
+    trips_f["direction_id"] = (
+        pd.to_numeric(trips_f["direction_id"], errors="coerce").fillna(0).astype(int)
+    )
+
+    st = stop_times.sort_values(["trip_id", "stop_sequence"])
+    first = st.groupby("trip_id", as_index=False).first()
+    merged = trips_f[["trip_id", "route_id", "direction_id"]].merge(
+        first[["trip_id", "departure_time", "arrival_time"]],
+        on="trip_id",
+        how="inner",
+    )
+    merged["dep_str"] = merged["departure_time"].fillna(merged["arrival_time"])
+    merged["dep_min"] = merged["dep_str"].map(gtfs_time_to_minutes)
+    merged = merged.dropna(subset=["dep_min"])
+
+    st_full = st.merge(merged[["trip_id", "route_id", "direction_id", "dep_min"]], on="trip_id")
+    st_full["time_str"] = st_full["arrival_time"].fillna(st_full["departure_time"])
+    st_full["stop_min"] = st_full["time_str"].map(gtfs_time_to_minutes)
+    st_full["offset_min"] = st_full["stop_min"] - st_full["dep_min"]
+    st_full = st_full.dropna(subset=["offset_min"])
+    st_full["route_id"] = st_full["route_id"].astype(str)
+
+    if not stops.empty:
+        parent = stops.set_index("stop_id")["parent_station"].to_dict()
+        names = stops.set_index("stop_id")["stop_name"].to_dict()
+        st_full["parent_stop_id"] = st_full["stop_id"].map(
+            lambda s: parent.get(str(s), str(s)).replace("nan", str(s))
+        )
+        st_full["stop_name"] = st_full["stop_id"].map(lambda s: names.get(str(s), str(s)))
+    else:
+        st_full["parent_stop_id"] = st_full["stop_id"]
+        st_full["stop_name"] = st_full["stop_id"]
+
+    agg = (
+        st_full.groupby(["route_id", "direction_id", "parent_stop_id", "stop_name", "stop_sequence"], as_index=False)[
+            "offset_min"
+        ]
+        .median()
+        .sort_values(["route_id", "direction_id", "stop_sequence"])
+    )
+    return agg
+
+
+def expand_schedule_to_station_times(
+    schedule: pd.DataFrame,
+    schedule_dir: Path,
+    *,
+    offset_templates: pd.DataFrame | None = None,
+    route_id: str | None = None,
+) -> pd.DataFrame:
+    """Mở rộng lịch route×direction×hour → giờ đến từng ga (offset từ GTFS).
+
+    schedule columns: route (or route_id), direction (or direction_id), hour, opt_trips.
+    """
+    schedule_dir = Path(schedule_dir)
+    templates = offset_templates if offset_templates is not None else load_gtfs_stop_offset_templates(schedule_dir)
+
+    sch = schedule.copy()
+    route_col = "route_id" if "route_id" in sch.columns else "route"
+    dir_col = "direction_id" if "direction_id" in sch.columns else "direction"
+    trips_col = "opt_trips" if "opt_trips" in sch.columns else "trips"
+
+    if route_id is not None:
+        sch = sch.loc[sch[route_col].astype(str) == str(route_id)]
+
+    rows: list[dict[str, Any]] = []
+    for _, slot in sch.iterrows():
+        rid = str(slot[route_col])
+        direction = int(slot[dir_col])
+        hour = int(slot["hour"])
+        n_trips = max(int(slot[trips_col]), 0)
+        if n_trips <= 0:
+            continue
+
+        pattern = templates.loc[
+            (templates["route_id"] == rid) & (templates["direction_id"] == direction)
+        ]
+        if pattern.empty:
+            continue
+
+        hour_start = hour * 60
+        spacing = 60.0 / n_trips
+        for trip_i in range(n_trips):
+            first_dep = hour_start + (trip_i + 0.5) * spacing
+            for _, stop in pattern.iterrows():
+                arr_min = first_dep + float(stop["offset_min"])
+                rows.append(
+                    dict(
+                        route=rid,
+                        direction=direction,
+                        hour=hour,
+                        parent_stop_id=str(stop["parent_stop_id"]),
+                        stop_name=str(stop["stop_name"]),
+                        stop_sequence=int(stop["stop_sequence"]),
+                        scheduled_time=_minutes_to_hhmm(arr_min),
+                        scheduled_min=arr_min,
+                    )
+                )
+
+    out = pd.DataFrame(rows)
+    if out.empty:
+        return out
+    return out.sort_values(["route", "direction", "scheduled_min", "stop_sequence"]).reset_index(drop=True)
+
+
 WEATHER_LABEL_CATEGORIES = [
     "clear",
     "mainly_clear",

@@ -29,8 +29,6 @@ from lib.ui_nearest import resolve_to_nearest_training_day  # noqa: E402
 from lib.ui_scenario import (  # noqa: E402
     SEASONS,
     SEASON_VI,
-    WEATHER_OPTIONS,
-    WEATHER_VI,
     WEEKDAY_WEEKEND_OPTIONS,
     WEEKDAY_WEEKEND_VI,
     ScenarioSelection,
@@ -39,17 +37,44 @@ from lib.ui_scenario import (  # noqa: E402
 )
 from lib.ui_lambda import (  # noqa: E402
     LAMBDA_BALANCED,
-    PARETO_COUNT,
+    PARETO_ZONE_ORDER,
+    PARETO_ZONES,
     PRIORITY_COLORS,
     PRIORITY_VI,
-    default_pareto_index,
-    lambda_at_pareto_index,
     lambda_priority,
+    lambda_to_pareto_index,
+    pareto_compact_label,
+    pareto_point_for_lambda,
+)
+from lib.ui_factors import (  # noqa: E402
+    load_feature_medians,
+    prepare_hourly_factors_for_model,
+)
+from lib.ui_constraints import (  # noqa: E402
+    ConstraintOverrides,
+    ValidationError,
+    default_constraint_panel,
+    merge_overrides,
+    validate_constraint_config,
+)
+from lib.ui_weather_groups import (  # noqa: E402
+    WEATHER_GROUP_KEYS,
+    WEATHER_GROUP_VI,
+    apply_weather_group_to_hourly,
+    load_weather_groups,
+)
+from lib.ui_station_schedule import (  # noqa: E402
+    BOROUGH_VI,
+    NYC_BOROUGHS,
+    schedule_by_station,
+    station_schedule_dataframe,
 )
 UI_DIR = NOTEBOOKS / "outputs" / "default" / "ui_export"
 DATA_DIR = ROOT / "datasets"
 FACTORS_HOURLY = DATA_DIR / "factors_hourly.csv"
 FACTORS_DAILY = DATA_DIR / "factors_daily.csv"
+SCHEDULE_DIR = DATA_DIR / "schedule_current"
+RIDERSHIP = DATA_DIR / "ridership.csv"
 
 THEME_CSS = """
 <style>
@@ -121,7 +146,24 @@ def load_artifacts(_model_mtime: float):
     ui_config["_model_built_at"] = datetime.fromtimestamp(_model_mtime).strftime(
         "%Y-%m-%d %H:%M"
     )
-    return predictor, ui_config, route_meta, optimizer_state, baseline_lookup, routes
+    feature_medians = load_feature_medians(UI_DIR)
+    wg_path = UI_DIR / "weather_groups.json"
+    if not wg_path.exists():
+        from lib.ui_weather_groups import dump_weather_groups
+
+        dump_weather_groups(wg_path, FACTORS_HOURLY)
+    wg_mtime = os.path.getmtime(wg_path)
+    weather_groups = load_weather_groups(str(UI_DIR), wg_mtime)
+    return (
+        predictor,
+        ui_config,
+        route_meta,
+        optimizer_state,
+        baseline_lookup,
+        routes,
+        feature_medians,
+        weather_groups,
+    )
 
 
 def predict_route_hourly_demand(
@@ -198,6 +240,181 @@ def build_demand_headway_chart(hourly: pd.DataFrame) -> go.Figure:
     return fig
 
 
+def render_pareto_selector() -> tuple[int, float]:
+    """Ưu tiên chờ ↔ chi phí — 3 vùng + 8 điểm λ curated."""
+    zone_labels = [PARETO_ZONES[z]["label_vi"] for z in PARETO_ZONE_ORDER]
+    zone = st.radio(
+        "Vùng Pareto",
+        zone_labels,
+        index=0,
+        help="Frontier weekday_peak — 8 điểm λ đều, lồi tốt.",
+    )
+    zone_key = next(k for k in PARETO_ZONE_ORDER if PARETO_ZONES[k]["label_vi"] == zone)
+    zconf = PARETO_ZONES[zone_key]
+    lambdas = list(zconf["lambdas"])
+    default_lam = float(zconf.get("default", lambdas[0]))
+    default_idx = lambdas.index(default_lam) if default_lam in lambdas else 0
+
+    lambda_cost = st.selectbox(
+        "Mức λ",
+        lambdas,
+        index=default_idx,
+        format_func=pareto_compact_label,
+    )
+    st.caption(zconf["hint"])
+
+    with st.expander("λ=211 — vùng diminishing returns (không khuyến nghị)", expanded=False):
+        st.caption(PARETO_ZONES["avoid"]["hint"])
+        use_avoid = st.checkbox("Dùng λ=211 dù biết rủi ro", value=False)
+        if use_avoid:
+            lambda_cost = 211.0
+            st.warning(
+                "λ=211: tỉ lệ lợi/chi tệ nhất trên frontier — chỉ dùng khi cần thử nghiệm."
+            )
+
+    pareto_index = lambda_to_pareto_index(lambda_cost)
+    p = pareto_point_for_lambda(lambda_cost)
+    if p and p.tag == "Knee":
+        st.caption("✓ Điểm knee — khuyến nghị mặc định.")
+    st.markdown(priority_pill(lambda_cost), unsafe_allow_html=True)
+    return pareto_index, float(lambda_cost)
+
+
+def apply_manual_weather(hourly: pd.DataFrame, manual: dict[str, float | int] | None) -> pd.DataFrame:
+    if not manual:
+        return hourly
+    out = hourly.copy()
+    for k, v in manual.items():
+        if k in out.columns:
+            out[k] = v
+    if "apparent_temperature_c" in out.columns and "temperature_c" in manual:
+        out["apparent_temperature_c"] = float(manual["temperature_c"]) - 2.0
+    if "precipitation_mm" in out.columns and "rain_mm" in manual:
+        out["precipitation_mm"] = float(manual["rain_mm"])
+    return out
+
+
+def render_constraint_panel(ui_config: dict) -> dict:
+    """Sidebar panel — defaults from ui_config.json."""
+    defaults = default_constraint_panel(ui_config)
+    with st.expander("Ràng buộc nâng cao (tuỳ chọn)", expanded=False):
+        enabled = st.checkbox("Bật tùy chỉnh ràng buộc", value=False)
+        if not enabled:
+            return defaults
+        c1, c2 = st.columns(2)
+        with c1:
+            use_route_fleet = st.checkbox("Fleet theo tuyến", value=defaults["use_route_fleet"])
+            use_system_fleet = st.checkbox("Fleet toàn hệ", value=defaults["use_system_fleet"])
+        with c2:
+            use_capacity = st.checkbox("Sàn sức chứa", value=defaults["use_capacity"])
+            use_smoothness = st.checkbox("Mượt theo giờ", value=defaults["use_smoothness"])
+        max_system_fleet = st.number_input(
+            "max_system_fleet",
+            value=float(defaults["max_system_fleet"]),
+            min_value=1.0,
+            step=10.0,
+        )
+        capacity_per_trip = st.number_input(
+            "capacity_per_trip",
+            value=float(defaults["capacity_per_trip"]),
+            min_value=1.0,
+            step=50.0,
+        )
+        smoothness = st.slider(
+            "smoothness_max_delta",
+            1,
+            10,
+            int(defaults["smoothness_max_delta"]),
+        )
+        hw1, hw2 = st.columns(2)
+        with hw1:
+            min_headway = st.number_input(
+                "min_headway_min",
+                value=float(defaults["min_headway_min"]),
+                min_value=1.0,
+                step=0.5,
+            )
+        with hw2:
+            max_headway = st.number_input(
+                "max_headway_min",
+                value=float(defaults["max_headway_min"]),
+                min_value=2.0,
+                step=1.0,
+            )
+        st.caption("Factor chuyến theo nhóm giờ")
+        f1, f2, f3 = st.columns(3)
+        with f1:
+            peak_f = st.number_input("peak max", value=float(defaults["trips_peak_max_factor"]), step=0.05)
+        with f2:
+            off_f = st.number_input("off-peak max", value=float(defaults["trips_offpeak_max_factor"]), step=0.05)
+        with f3:
+            ovn_f = st.number_input("overnight max", value=float(defaults["trips_overnight_max_factor"]), step=0.05)
+        opt_target = st.selectbox(
+            "opt_target",
+            ["objective", "wait", "cost"],
+            index=["objective", "wait", "cost"].index(str(defaults["opt_target"])),
+        )
+        if st.button("Reset về mặc định", use_container_width=True):
+            st.rerun()
+        return {
+            **defaults,
+            "use_route_fleet": use_route_fleet,
+            "use_system_fleet": use_system_fleet,
+            "use_capacity": use_capacity,
+            "use_smoothness": use_smoothness,
+            "max_system_fleet": max_system_fleet,
+            "capacity_per_trip": capacity_per_trip,
+            "smoothness_max_delta": int(smoothness),
+            "min_headway_min": min_headway,
+            "max_headway_min": max_headway,
+            "trips_peak_max_factor": peak_f,
+            "trips_offpeak_max_factor": off_f,
+            "trips_overnight_max_factor": ovn_f,
+            "opt_target": opt_target,
+        }
+
+
+def render_station_schedule_by_borough(route_id: str, result: dict) -> None:
+    """Bảng lịch theo ga, chia tab theo quận."""
+    st.subheader("Lịch theo ga (GTFS)")
+    detail = result["detail"][["hour", "direction", "opt_trips"]].rename(
+        columns={"opt_trips": "opt_trips"}
+    )
+    detail["route"] = route_id
+    rid_m = os.path.getmtime(RIDERSHIP) if RIDERSHIP.exists() else 0.0
+    sd_m = os.path.getmtime(SCHEDULE_DIR) if SCHEDULE_DIR.exists() else 0.0
+    records = schedule_by_station(
+        detail,
+        schedule_dir=str(SCHEDULE_DIR),
+        ridership_path=str(RIDERSHIP),
+        route_id=route_id,
+        schedule_dir_mtime=sd_m,
+        ridership_mtime=rid_m,
+    )
+    if not records:
+        st.info("Không mở rộng được lịch theo ga cho tuyến này.")
+        return
+    df = station_schedule_dataframe(records)
+    boroughs = [b for b in NYC_BOROUGHS if b in df["borough"].unique()]
+    if not boroughs:
+        boroughs = sorted(df["borough"].dropna().unique().tolist())
+    tabs = st.tabs([BOROUGH_VI.get(b, b) for b in boroughs] + ["Tất cả"])
+    for tab, borough in zip(tabs, boroughs):
+        with tab:
+            sub = df.loc[df["borough"] == borough].sort_values(["scheduled_time", "station_name"])
+            st.dataframe(
+                sub[["station_name", "route", "direction", "hour", "scheduled_time"]],
+                use_container_width=True,
+                height=360,
+            )
+    with tabs[-1]:
+        st.dataframe(
+            df.sort_values(["borough", "scheduled_time"]),
+            use_container_width=True,
+            height=400,
+        )
+
+
 def render_results(
     *,
     route_id: str,
@@ -209,6 +426,7 @@ def render_results(
     export_tag: str,
     context_badges: list[str] | None = None,
     scenario_warning: str | None = None,
+    factor_clip_note: str | None = None,
 ) -> None:
     badges = " ".join(
         f'<span style="{BADGE_STYLE}">{b}</span>' for b in (context_badges or [])
@@ -221,6 +439,9 @@ def render_results(
 
     if scenario_warning:
         st.warning(scenario_warning)
+
+    if factor_clip_note:
+        st.caption(factor_clip_note)
 
     if result.get("missing_hours"):
         st.warning(f"Thiếu {len(result['missing_hours'])} giờ — dùng median fallback.")
@@ -311,6 +532,19 @@ def render_results(
     with st.expander("Chi tiết theo hướng"):
         st.dataframe(result["hourly_by_direction"], use_container_width=True)
 
+    binding = result.get("constraint_binding")
+    if binding:
+        with st.expander("Ràng buộc đang bind", expanded=False):
+            st.write(
+                f"TRIPS_MIN: **{binding['at_min_pct']:.0f}%** · "
+                f"TRIPS_MAX: **{binding['at_max_pct']:.0f}%** · "
+                f"Interior: **{binding['interior_pct']:.0f}%**"
+            )
+            if binding.get("by_hour_group"):
+                st.dataframe(pd.DataFrame(binding["by_hour_group"]), use_container_width=True)
+
+    render_station_schedule_by_borough(route_id, result)
+
     export_df = result["detail"].copy()
     export_df["route"] = route_id
     export_df["run_context"] = export_tag
@@ -340,7 +574,16 @@ def main() -> None:
     min_date, _, picker_max_date = factors_date_bounds()
 
     try:
-        predictor, ui_config, _, optimizer_state, _, routes = load_artifacts(model_mtime)
+        (
+            predictor,
+            ui_config,
+            _,
+            optimizer_state,
+            _,
+            routes,
+            feature_medians,
+            weather_groups,
+        ) = load_artifacts(model_mtime)
     except Exception as exc:
         st.error(f"Không tải được model từ `{UI_DIR}`: {exc}")
         st.stop()
@@ -350,14 +593,24 @@ def main() -> None:
     with st.sidebar:
         route_id = st.selectbox("Tuyến", routes, index=routes.index("1") if "1" in routes else 0)
 
+        st.markdown("---")
+        _, lambda_cost = render_pareto_selector()
+        st.markdown("---")
+
         input_mode = st.radio(
             "Nguồn demand",
             ["Theo ngày cụ thể", "Kịch bản tổng quát"],
-            help="Hai chế độ độc lập: chọn ngày thật hoặc profile median từ training.",
+            help="Chọn ngày thật (crawl/API) hoặc profile median từ training.",
         )
 
         selected_date: date | None = None
         scenario_sel: ScenarioSelection | None = None
+        weather_group = st.selectbox(
+            "Nhóm thời tiết",
+            WEATHER_GROUP_KEYS,
+            format_func=lambda k: WEATHER_GROUP_VI[k],
+            index=WEATHER_GROUP_KEYS.index("sunny"),
+        )
 
         if input_mode == "Theo ngày cụ thể":
             default_pick = min(max(date(2024, 6, 3), min_date), picker_max_date)
@@ -388,13 +641,7 @@ def main() -> None:
             )
 
             st.markdown("**3 · Thời tiết**")
-            weather = st.radio(
-                "weather",
-                WEATHER_OPTIONS,
-                format_func=lambda x: WEATHER_VI[x],
-                horizontal=True,
-                label_visibility="collapsed",
-            )
+            st.caption(f"Nhóm: **{WEATHER_GROUP_VI[weather_group]}** (chọn ở trên)")
 
             st.markdown("**4 · Ngày lễ**")
             filter_holiday = st.checkbox("Lọc theo ngày lễ", value=False)
@@ -418,24 +665,39 @@ def main() -> None:
             scenario_sel = ScenarioSelection(
                 weekday_weekend=weekday_weekend,
                 season=season,
-                weather=weather,
+                weather="clear",
                 filter_holiday=filter_holiday,
                 holiday_name=holiday_name if filter_holiday else None,
                 filter_major_event=filter_major_event,
             )
 
-        st.markdown("**Ưu tiên chờ ↔ chi phí**")
-        pareto_index = st.slider(
-            "Mức Pareto",
-            min_value=1,
-            max_value=PARETO_COUNT,
-            value=default_pareto_index(),
-            step=1,
-            help="1 = ưu tiên chờ · 20 = ưu tiên chi phí",
-        )
-        lambda_cost = lambda_at_pareto_index(pareto_index)
-        st.markdown(f"**λ = {lambda_cost:.0f}**")
-        st.markdown(priority_pill(lambda_cost), unsafe_allow_html=True)
+        st.markdown("---")
+        constraint_panel = render_constraint_panel(ui_config)
+
+        manual_weather: dict[str, float | int] | None = None
+        with st.expander("Tuỳ chỉnh thủ công (nâng cao)", expanded=False):
+            prof = weather_groups["groups"].get(weather_group, {})
+            manual_weather = {}
+            c1, c2 = st.columns(2)
+            manual_weather["temperature_c"] = c1.number_input(
+                "Nhiệt độ (°C)", value=float(prof.get("temperature_c", 15.0))
+            )
+            manual_weather["rain_mm"] = c2.number_input(
+                "Mưa (mm)", value=float(prof.get("rain_mm", 0.0))
+            )
+            c3, c4 = st.columns(2)
+            manual_weather["windspeed_kmh"] = c3.number_input(
+                "Gió (km/h)", value=float(prof.get("windspeed_kmh", 15.0))
+            )
+            manual_weather["snowfall_cm"] = c4.number_input(
+                "Tuyết (cm)", value=float(prof.get("snowfall_cm", 0.0))
+            )
+            f1, f2, f3 = st.columns(3)
+            manual_weather["is_rain"] = int(f1.checkbox("Có mưa", value=bool(prof.get("is_rain", 0))))
+            manual_weather["is_snow"] = int(f2.checkbox("Có tuyết", value=bool(prof.get("is_snow", 0))))
+            manual_weather["is_severe_wind"] = int(
+                f3.checkbox("Gió mạnh", value=bool(prof.get("is_severe_wind", 0)))
+            )
 
         run_btn = st.button("Chạy tối ưu", type="primary", use_container_width=True)
         if st.button("Tải lại model", use_container_width=True):
@@ -443,15 +705,13 @@ def main() -> None:
             st.rerun()
 
     if not run_btn:
-        if input_mode == "Theo ngày cụ thể":
-            st.info("Chọn tuyến, ngày, kéo mức Pareto (1–20) rồi bấm **Chạy tối ưu**.")
-        else:
-            st.info(
-                "Chọn nhóm bắt buộc (ngày, mùa, thời tiết), tùy chọn lễ/sự kiện, "
-                "mức Pareto (1–20) rồi **Chạy tối ưu**."
-            )
+        st.info(
+            "Chọn tuyến, ưu tiên Pareto, ngày/kịch bản rồi bấm **Chạy tối ưu**. "
+            "Ràng buộc nâng cao là tuỳ chọn."
+        )
         return
 
+    factor_clip_note: str | None = None
     with st.spinner("Đang dự báo demand & tối ưu…"):
         scenario_warning: str | None = None
         try:
@@ -462,23 +722,34 @@ def main() -> None:
                     factors_hourly_path=str(FACTORS_HOURLY),
                     factors_daily_path=str(FACTORS_DAILY),
                 )
-                nearest = resolve_to_nearest_training_day(
+                prepared = prepare_hourly_factors_for_model(
                     query_hourly,
+                    feature_medians=feature_medians,
+                    factors_hourly_path=str(FACTORS_HOURLY),
+                    factors_hourly_mtime=factors_mtime,
+                )
+                hourly_factors = prepared.hourly_factors
+                factor_clip_note = prepared.clip_note
+                if weather_group != "sunny":
+                    hourly_factors = apply_weather_group_to_hourly(
+                        hourly_factors, weather_group, weather_groups
+                    )
+                hourly_factors = apply_manual_weather(hourly_factors, manual_weather)
+                nearest = resolve_to_nearest_training_day(
+                    hourly_factors,
                     str(FACTORS_HOURLY),
                     file_mtime=factors_mtime,
                     query_date=pd.Timestamp(selected_date),
                 )
-                hourly_factors = nearest.hourly_factors
-                is_weekend = int(hourly_factors["is_weekend"].median())
-                if nearest.is_self_match or nearest.distance < 1e-3:
-                    source_label = query_src
-                else:
-                    source_label = f"{query_src} → NN training: {', '.join(nearest.nearest_dates[:3])}"
+                if not (nearest.is_self_match or nearest.distance < 1e-3):
                     scenario_warning = (
-                        f"Profile ngày chọn không có trong training (hoặc khác feature). "
-                        f"Dùng ngày gần nhất trong không gian feature: **{', '.join(nearest.nearest_dates)}** "
-                        f"({nearest.note})."
+                        f"Profile ngày chọn không có trong training. "
+                        f"Dùng ngày gần nhất: **{', '.join(nearest.nearest_dates)}** ({nearest.note})."
                     )
+                is_weekend = int(hourly_factors["is_weekend"].median())
+                source_label = query_src
+                if weather_group != "sunny":
+                    source_label += f" · nhóm {WEATHER_GROUP_VI[weather_group]}"
                 day_label = "Cuối tuần" if is_weekend else "Ngày thường"
                 context_badges = [
                     f"Tuyến {route_id}",
@@ -495,6 +766,18 @@ def main() -> None:
                     file_mtime=factors_mtime,
                 )
                 hourly_factors = built.hourly_factors
+                hourly_factors = apply_weather_group_to_hourly(
+                    hourly_factors, weather_group, weather_groups
+                )
+                hourly_factors = apply_manual_weather(hourly_factors, manual_weather)
+                prepared = prepare_hourly_factors_for_model(
+                    hourly_factors,
+                    feature_medians=feature_medians,
+                    factors_hourly_path=str(FACTORS_HOURLY),
+                    factors_hourly_mtime=factors_mtime,
+                )
+                hourly_factors = prepared.hourly_factors
+                factor_clip_note = prepared.clip_note
                 is_weekend = built.is_weekend
                 scenario_warning = None
                 if built.nn_distance >= 1e-3:
@@ -508,6 +791,7 @@ def main() -> None:
                 context_badges = [
                     f"Tuyến {route_id}",
                     f"Kịch bản · {built.label}",
+                    WEATHER_GROUP_VI[weather_group],
                     f"{built.n_days} ngày · median/giờ",
                 ]
                 if scenario_sel.filter_holiday:
@@ -521,7 +805,7 @@ def main() -> None:
                         [
                             scenario_sel.weekday_weekend,
                             scenario_sel.season,
-                            scenario_sel.weather,
+                            weather_group,
                         ]
                         + ([scenario_sel.holiday_name.replace(" ", "_")] if scenario_sel.holiday_name else [])
                         + (["major_event"] if scenario_sel.filter_major_event else [])
@@ -531,15 +815,25 @@ def main() -> None:
             st.error(str(exc))
             st.stop()
 
+        overrides = merge_overrides(ui_config, constraint_panel)
+        try:
+            validate_constraint_config(overrides, optimizer_state, route_id=route_id)
+        except ValidationError as exc:
+            st.error(str(exc))
+            st.stop()
+
         demand_hourly = predict_route_hourly_demand(predictor, route_id, hourly_factors)
+        cap = float(overrides.capacity_per_trip or ui_config.get("capacity_per_trip", 1200))
         result = optimize_route_day(
             route_id,
             demand_hourly,
             optimizer_state,
             lambda_cost=float(lambda_cost),
-            capacity_per_trip=int(ui_config.get("capacity_per_trip", 1200)),
+            capacity_per_trip=int(cap),
             is_weekend=is_weekend,
             lambda_ref=float(ui_config.get("lambda_opt", LAMBDA_BALANCED)),
+            constraint_overrides=overrides,
+            ui_config=ui_config,
         )
 
     render_results(
@@ -552,6 +846,7 @@ def main() -> None:
         export_tag=export_tag,
         context_badges=context_badges,
         scenario_warning=scenario_warning,
+        factor_clip_note=factor_clip_note,
     )
 
 
