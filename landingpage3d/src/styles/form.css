@@ -1,0 +1,84 @@
+.feedback-form-wrap {
+  padding: 0;
+}
+
+.form-title {
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+  text-shadow: var(--text-shadow);
+}
+
+.form-subtitle {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+  text-shadow: var(--text-shadow);
+}
+
+.feedback-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.form-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  text-shadow: var(--text-shadow);
+}
+
+.feedback-form input,
+.feedback-form textarea {
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.15);
+  color: var(--text);
+  backdrop-filter: blur(4px);
+  transition: border-color 0.25s, background 0.25s;
+}
+
+.feedback-form input::placeholder,
+.feedback-form textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.feedback-form input:focus,
+.feedback-form textarea:focus {
+  outline: none;
+  border-color: rgba(240, 192, 64, 0.5);
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.feedback-form textarea {
+  resize: vertical;
+  min-height: 72px;
+}
+
+.form-submit {
+  margin-top: 0.15rem;
+}
+
+.form-toast {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-align: center;
+  text-shadow: var(--text-shadow);
+}
+
+.form-toast:not([hidden]) {
+  display: block;
+}

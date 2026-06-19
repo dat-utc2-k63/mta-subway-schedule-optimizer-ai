@@ -240,9 +240,9 @@ def build_dynamic_bounds(
     baseline_trips: np.ndarray,
     slot_hour: np.ndarray,
     *,
-    peak_factor: float = 1.15,
-    offpeak_factor: float = 1.35,
-    overnight_factor: float = 1.10,
+    peak_factor: float = 1.40,
+    offpeak_factor: float = 1.15,
+    overnight_factor: float = 1.05,
     min_factor: float = 0.5,
     overnight_min_factor: float | None = None,
     max_delta: int = 3,
@@ -398,7 +398,7 @@ def build_transfer_matrix(
     route_aliases: dict[str, str] | None = None,
     min_weight: float = 0.1,
 ) -> pd.DataFrame:
-    """Ma trận transfer N×N: shared stations / sqrt(n_r1 × n_r2); zero nếu ≤ min_weight."""
+    """Deprecated — spillover removed per upgrade_model.md (Future Work only)."""
     raw = routes_by_station_df.copy()
     col = route_col
     if col is None:
@@ -592,7 +592,57 @@ def plot_transfer_heatmap(
     return ax
 
 
-def compute_wait_with_overflow(
+def cycle_times_to_map(
+    cycle_times: pd.DataFrame | dict[tuple[str, int], float] | None,
+    *,
+    default_cycle_min: float = 90.0,
+) -> dict[tuple[str, int], float]:
+    """Lookup (route_id, direction_id) → cycle_time_min."""
+    if cycle_times is None:
+        return {}
+    if isinstance(cycle_times, dict):
+        return {k: float(v) for k, v in cycle_times.items()}
+    out: dict[tuple[str, int], float] = {}
+    for _, row in cycle_times.iterrows():
+        out[(str(row["route_id"]), int(row["direction_id"]))] = float(row["cycle_time_min"])
+    if not out:
+        return {}
+    return out
+
+
+def compute_vehicle_hours(
+    trips: np.ndarray,
+    *,
+    slot_route: np.ndarray,
+    slot_dir: np.ndarray,
+    cycle_times: pd.DataFrame | dict[tuple[str, int], float] | None = None,
+    default_cycle_min: float = 90.0,
+) -> tuple[np.ndarray, float]:
+    """VehicleHours_t = Trips_t × CycleTime_t / 60 per slot; returns (per-slot, total)."""
+    t = np.maximum(np.nan_to_num(np.asarray(trips, dtype=float), nan=0.0), 0.0)
+    routes = np.asarray(slot_route)
+    dirs = np.asarray(slot_dir, dtype=int)
+    ct_map = cycle_times_to_map(cycle_times, default_cycle_min=default_cycle_min)
+    slot_vh = np.zeros(len(t), dtype=float)
+    for i in range(len(t)):
+        key = (str(routes[i]), int(dirs[i]))
+        cycle = float(ct_map.get(key, default_cycle_min))
+        slot_vh[i] = t[i] * cycle / 60.0
+    return slot_vh, float(slot_vh.sum())
+
+
+def compute_fleet_utilization(
+    total_vehicle_hours: float,
+    system_fleet_capacity: float,
+    *,
+    hours_in_day: float = 24.0,
+) -> float:
+    """Fleet utilization = total VH / (peak system fleet × hours in day)."""
+    denom = max(float(system_fleet_capacity) * float(hours_in_day), 1e-9)
+    return float(total_vehicle_hours) / denom
+
+
+def compute_schedule_metrics(
     demand: np.ndarray,
     trips: np.ndarray,
     *,
@@ -600,11 +650,17 @@ def compute_wait_with_overflow(
     slot_dir: np.ndarray,
     slot_hour: np.ndarray,
     capacity_per_trip: float = 1200.0,
-    lambda_cost: float = 150.0,
+    cycle_times: pd.DataFrame | dict[tuple[str, int], float] | None = None,
+    default_cycle_min: float = 90.0,
+    cost_per_vehicle_hour: float | None = None,
+    system_fleet_capacity: float | None = None,
 ) -> dict[str, Any]:
-    """Passenger-min wait có overflow theo chuỗi giờ (route × direction).
+    """Queue-based passenger wait + vehicle-hour operating cost (no weighted-sum objective).
 
-    Overflow từ giờ trước cộng vào demand giờ sau; hành khách kẹt chờ thêm ~1.5×headway.
+    Queue propagates between consecutive hours of the same route-direction:
+      Queue_t = max(0, Queue_{t-1} + Demand_t - Capacity_t)
+      Served_t = min(Demand_t + Queue_{t-1}, Capacity_t)
+      PassengerWait_t = Queue_{t-1} × Headway_t + Served_t × Headway_t / 2
     """
     d = np.clip(np.nan_to_num(np.asarray(demand, dtype=float), nan=0.0), 0.0, None)
     t = np.maximum(np.nan_to_num(np.asarray(trips, dtype=float), nan=1.0), 1.0)
@@ -615,50 +671,108 @@ def compute_wait_with_overflow(
     cap_pt = float(capacity_per_trip)
 
     slot_wait = np.zeros(n, dtype=float)
-    overflow_out = np.zeros(n, dtype=float)
-    overflow_prev_arr = np.zeros(n, dtype=float)
-    served_new_arr = np.zeros(n, dtype=float)
+    queue_out = np.zeros(n, dtype=float)
+    queue_prev_arr = np.zeros(n, dtype=float)
+    served_arr = np.zeros(n, dtype=float)
 
     groups: dict[tuple[str, int], list[int]] = {}
     for i in range(n):
         key = (str(routes[i]), int(dirs[i]))
         groups.setdefault(key, []).append(i)
 
+    max_queue = 0.0
     for indices in groups.values():
-        overflow_prev = 0.0
+        queue_prev = 0.0
         for i in sorted(indices, key=lambda idx: int(hours[idx])):
             capacity = t[i] * cap_pt
             demand_i = d[i]
-            effective = demand_i + overflow_prev
-
-            served_new = min(demand_i, max(0.0, capacity - overflow_prev))
+            served = min(demand_i + queue_prev, capacity)
             headway = 60.0 / t[i]
-            wait_base = headway / 2.0
-            wait_overflow = headway + wait_base
 
-            overflow_prev_arr[i] = overflow_prev
-            served_new_arr[i] = served_new
-            slot_wait[i] = served_new * wait_base + overflow_prev * wait_overflow
-            overflow_out[i] = max(0.0, effective - capacity)
-            overflow_prev = overflow_out[i]
+            queue_prev_arr[i] = queue_prev
+            served_arr[i] = served
+            slot_wait[i] = queue_prev * headway + served * headway / 2.0
+            queue_out[i] = max(0.0, queue_prev + demand_i - capacity)
+            max_queue = max(max_queue, queue_out[i])
+            queue_prev = queue_out[i]
 
+    slot_vh, total_vh = compute_vehicle_hours(
+        t, slot_route=routes, slot_dir=dirs,
+        cycle_times=cycle_times, default_cycle_min=default_cycle_min,
+    )
     total_wait = float(slot_wait.sum())
     total_demand = float(d.sum())
-    overflow_slots = int((overflow_out > 0).sum())
-    return dict(
+    overflow_slots = int((queue_out > 0).sum())
+    fleet_cost = float(total_vh * cost_per_vehicle_hour) if cost_per_vehicle_hour is not None else None
+
+    out: dict[str, Any] = dict(
         total_passenger_min_wait=total_wait,
         weighted_avg_wait_min=total_wait / max(total_demand, 1e-9),
         overflow_pct=float(overflow_slots / max(n, 1)) * 100.0,
-        total_overflow_pax=float(overflow_out.sum()),
-        total_fleet_cost=float(lambda_cost) * float(t.sum()),
+        total_overflow_pax=float(queue_out.sum()),
+        max_queue_length=float(max_queue),
+        total_vehicle_hours=float(total_vh),
         total_trips=float(t.sum()),
-        objective=float(total_wait + float(lambda_cost) * float(t.sum())),
-        lambda_cost=float(lambda_cost),
         slot_wait=slot_wait,
-        overflow_out=overflow_out,
-        overflow_prev=overflow_prev_arr,
-        served_new=served_new_arr,
+        slot_vehicle_hours=slot_vh,
+        overflow_out=queue_out,
+        queue_out=queue_out,
+        overflow_prev=queue_prev_arr,
+        queue_prev=queue_prev_arr,
+        served=served_arr,
+        served_new=served_arr,
     )
+    if fleet_cost is not None:
+        out["fleet_cost"] = fleet_cost
+        out["cost_per_vehicle_hour"] = float(cost_per_vehicle_hour)
+    if system_fleet_capacity is not None and float(system_fleet_capacity) > 0:
+        out["system_fleet_capacity"] = float(system_fleet_capacity)
+        out["fleet_utilization"] = compute_fleet_utilization(
+            total_vh, float(system_fleet_capacity)
+        )
+    return out
+
+
+def compute_wait_with_overflow(
+    demand: np.ndarray,
+    trips: np.ndarray,
+    *,
+    slot_route: np.ndarray,
+    slot_dir: np.ndarray,
+    slot_hour: np.ndarray,
+    capacity_per_trip: float = 1200.0,
+    lambda_cost: float = 150.0,
+    cycle_times: pd.DataFrame | dict[tuple[str, int], float] | None = None,
+    default_cycle_min: float = 90.0,
+) -> dict[str, Any]:
+    """Backward-compatible alias → compute_schedule_metrics (queue model + vehicle hours)."""
+    m = compute_schedule_metrics(
+        demand, trips,
+        slot_route=slot_route, slot_dir=slot_dir, slot_hour=slot_hour,
+        capacity_per_trip=capacity_per_trip,
+        cycle_times=cycle_times, default_cycle_min=default_cycle_min,
+    )
+    m["total_fleet_cost"] = m["total_vehicle_hours"]
+    m["lambda_cost"] = float(lambda_cost)
+    return m
+
+
+def analytical_trips_per_slot(
+    demand: np.ndarray,
+    lambda_tradeoff: float,
+    cycle_time_min: np.ndarray,
+    *,
+    trips_min: np.ndarray,
+    trips_max: np.ndarray,
+) -> np.ndarray:
+    """Pareto scan helper: min D·30/t + λ·(t·cycle/60) → t* = sqrt(1800·D/(λ·cycle))."""
+    lam = max(float(lambda_tradeoff), 1e-9)
+    d = np.maximum(np.asarray(demand, dtype=float), 1e-9)
+    cyc = np.maximum(np.asarray(cycle_time_min, dtype=float), 1.0)
+    tmin = np.asarray(trips_min, dtype=float)
+    tmax = np.asarray(trips_max, dtype=float)
+    trips_star = np.sqrt(1800.0 * d / (lam * cyc))
+    return np.clip(np.round(trips_star), tmin, tmax).astype(int)
 
 
 def wait_totals_by_hour_groups(
@@ -787,18 +901,20 @@ def generate_pareto_frontier(
 
     base_m = evaluate_fn(base, demand, lam_eval)
     base_f1 = float(base_m["total_passenger_min_wait"])
-    base_f2 = float(base_m["total_fleet_cost"])
+    base_f2 = float(base_m.get("total_vehicle_hours", base_m.get("total_fleet_cost", 0.0)))
 
     candidates: list[dict[str, float]] = []
     for lam in lambda_scan:
         sol = np.asarray(optimize_fn(demand, float(lam)), dtype=int)
         m = evaluate_fn(sol, demand, lam_eval)
+        f2 = float(m.get("total_vehicle_hours", m.get("total_fleet_cost", 0.0)))
         candidates.append(
             dict(
                 lambda_equiv=float(lam),
                 f1=float(m["total_passenger_min_wait"]),
-                f2=float(m["total_fleet_cost"]),
+                f2=f2,
                 total_trips=float(m["total_trips"]),
+                total_vehicle_hours=f2,
             )
         )
     cand_df = pd.DataFrame(candidates)
@@ -827,6 +943,7 @@ def generate_pareto_frontier(
     pareto_df = pareto_df.sort_values("f1").reset_index(drop=True)
     pareto_df["f1_improve_pct"] = (base_f1 - pareto_df["f1"]) / max(base_f1, 1e-9) * 100.0
     pareto_df["f2_delta_pct"] = (pareto_df["f2"] - base_f2) / max(base_f2, 1e-9) * 100.0
+    pareto_df["vehicle_hours_delta_pct"] = pareto_df["f2_delta_pct"]
     pareto_df["z_star_f1"] = z_star[0]
     pareto_df["z_star_f2"] = z_star[1]
     return pareto_df
@@ -838,7 +955,7 @@ def plot_pareto_frontier(
     baseline_f2: float,
     *,
     ax: Any | None = None,
-    title: str = "Pareto frontier: fleet cost vs passenger-min wait",
+    title: str = "Pareto frontier: vehicle-hours vs passenger-min wait",
     save_path: Path | str | None = None,
     annotate_all: bool = True,
 ) -> Any:
@@ -898,7 +1015,7 @@ def plot_pareto_frontier(
     if annotate_all:
         for _, row in pareto_df.iterrows():
             ax.annotate(
-                f"λ={row['lambda_equiv']:.0f}\n{row['total_trips']:.0f} trips",
+                f"λ={row['lambda_equiv']:.0f}\n{row.get('total_vehicle_hours', row['f2']):.0f} vh",
                 (row["f2"], row["f1"]),
                 textcoords="offset points",
                 xytext=(4, 4),
@@ -906,7 +1023,7 @@ def plot_pareto_frontier(
                 alpha=0.85,
             )
 
-    ax.set_xlabel("f2: fleet cost (λ × trips)")
+    ax.set_xlabel("f2: total vehicle-hours")
     ax.set_ylabel("f1: passenger-min wait")
     ax.set_title(title)
     ax.legend(fontsize=8, loc="best")
@@ -1458,9 +1575,9 @@ def compute_merged_trip_bounds(
     baseline_trips: np.ndarray,
     slot_hour: np.ndarray,
     *,
-    peak_factor: float = 1.22,
-    offpeak_factor: float = 1.35,
-    overnight_factor: float = 1.10,
+    peak_factor: float = 1.40,
+    offpeak_factor: float = 1.15,
+    overnight_factor: float = 1.05,
     min_factor: float = 0.5,
     overnight_min_factor: float | None = None,
     max_delta: int = 3,
@@ -1651,13 +1768,12 @@ def apply_capacity_floor(
     t = np.maximum(t, floor)
 
     if max_overflow_pct is not None and slot_route is not None:
-        m = compute_wait_with_overflow(
+        m = compute_schedule_metrics(
             d, t,
             slot_route=np.asarray(slot_route),
             slot_dir=np.asarray(slot_dir),
             slot_hour=np.asarray(slot_hour),
             capacity_per_trip=cap,
-            lambda_cost=0.0,
         )
         if float(m["overflow_pct"]) > float(max_overflow_pct):
             overflow_idx = np.where(np.asarray(m["overflow_out"]) > 0)[0]

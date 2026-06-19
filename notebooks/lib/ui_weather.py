@@ -1,4 +1,4 @@
-"""Live / historical weather + calendar features for Streamlit UI (Open-Meteo + holidays)."""
+"""Live / historical weather + calendar features for optimizer UI (Open-Meteo + holidays)."""
 
 from __future__ import annotations
 

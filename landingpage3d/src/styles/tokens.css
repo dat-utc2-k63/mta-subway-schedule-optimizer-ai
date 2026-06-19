@@ -1,0 +1,54 @@
+/* Design tokens */
+:root {
+  --bg:           transparent;
+  --bg-warm:      transparent;
+  --bg-card:      rgba(255, 255, 255, 0.12);
+  --bg-panel:     transparent;
+  --text:         #f8f5f0;
+  --text-soft:    rgba(248, 245, 240, 0.82);
+  --text-muted:   rgba(248, 245, 240, 0.55);
+  --accent:       #f0c040;
+  --accent-soft:  rgba(240, 192, 64, 0.12);
+  --warm-light:   #f0c040;
+  --wall:         #8a8278;
+  --border:       rgba(248, 245, 240, 0.15);
+  --border-light: rgba(248, 245, 240, 0.08);
+  --font-sans:    'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-serif:   'Source Serif 4', Georgia, 'Times New Roman', serif;
+  --section-pad-x: clamp(1.5rem, 6vw, 8rem);
+  --content-max:   420px;
+  --ease-out:      cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-reveal:   cubic-bezier(0.65, 0, 0.35, 1);
+  --nav-height:    64px;
+  --text-shadow:   0 2px 20px rgba(0, 0, 0, 0.45), 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: #6db8ec;
+  color: var(--text);
+  line-height: 1.55;
+  overflow-x: hidden;
+}
+
+a { color: inherit; text-decoration: none; }
+::selection { background: rgba(240, 192, 64, 0.35); color: var(--text); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

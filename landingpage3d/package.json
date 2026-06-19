@@ -1,0 +1,22 @@
+{
+  "name": "mta-landing-3d",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@splinetool/runtime": "^1.9.82",
+    "gsap": "^3.12.5",
+    "lenis": "^1.1.18",
+    "three": "^0.171.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.171.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3"
+  }
+}

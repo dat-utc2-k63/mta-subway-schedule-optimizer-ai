@@ -34,14 +34,33 @@ class ConstraintOverrides:
         return {k: getattr(self, k) for k in self.__dataclass_fields__}
 
 
+def _system_fleet_cap(
+    ui_config: dict[str, Any],
+    optimizer_state: dict[str, Any] | None = None,
+) -> float:
+    if optimizer_state is not None:
+        for key in ("system_fleet_capacity", "max_system_fleet"):
+            v = optimizer_state.get(key)
+            if v is not None:
+                return float(v)
+    for key in ("system_fleet_capacity", "max_system_fleet"):
+        v = ui_config.get(key)
+        if v is not None:
+            return float(v)
+    return 0.0
+
+
 def default_constraint_panel(ui_config: dict[str, Any]) -> dict[str, Any]:
     """Defaults for UI — all values from ui_config.json."""
+    opt_target = str(ui_config.get("opt_target", "balanced"))
+    if opt_target == "objective":
+        opt_target = "balanced"
     return {
         "use_route_fleet": True,
         "use_system_fleet": False,
         "use_capacity": True,
         "use_smoothness": True,
-        "max_system_fleet": float(ui_config["max_system_fleet"]),
+        "max_system_fleet": _system_fleet_cap(ui_config),
         "capacity_per_trip": float(ui_config.get("capacity_per_trip", 1200)),
         "smoothness_max_delta": int(ui_config["smoothness_max_delta"]),
         "min_headway_min": float(ui_config["min_headway_min"]),
@@ -52,7 +71,7 @@ def default_constraint_panel(ui_config: dict[str, Any]) -> dict[str, Any]:
         "trips_min_factor": float(ui_config["trips_min_factor"]),
         "trips_overnight_min_factor": float(ui_config.get("trips_overnight_min_factor", ui_config["trips_min_factor"])),
         "lambda_cost": None,
-        "opt_target": str(ui_config.get("opt_target", "objective")),
+        "opt_target": opt_target,
     }
 
 
@@ -144,9 +163,9 @@ def recompute_trip_bounds(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Recompute TRIPS_MIN/MAX for slots using panel overrides."""
     cfg = ui_config or {}
-    peak = overrides.trips_peak_max_factor or float(cfg.get("trips_peak_max_factor", 1.22))
-    off = overrides.trips_offpeak_max_factor or float(cfg.get("trips_offpeak_max_factor", 1.35))
-    ovn = overrides.trips_overnight_max_factor or float(cfg.get("trips_overnight_max_factor", 1.14))
+    peak = overrides.trips_peak_max_factor or float(cfg.get("trips_peak_max_factor", 1.40))
+    off = overrides.trips_offpeak_max_factor or float(cfg.get("trips_offpeak_max_factor", 1.15))
+    ovn = overrides.trips_overnight_max_factor or float(cfg.get("trips_overnight_max_factor", 1.05))
     min_f = overrides.trips_min_factor or float(cfg.get("trips_min_factor", 0.5))
     ovn_min = overrides.trips_overnight_min_factor or float(cfg.get("trips_overnight_min_factor", min_f))
     min_hw = overrides.min_headway_min or float(cfg.get("min_headway_min", 3.0))
@@ -181,7 +200,7 @@ def apply_post_opt_constraints(
     """Apply apply_optimizer_constraints after analytical step."""
     max_fleet = overrides.max_system_fleet
     if max_fleet is None:
-        max_fleet = float(optimizer_state.get("max_system_fleet", ui_config["max_system_fleet"]))
+        max_fleet = _system_fleet_cap(ui_config, optimizer_state)
 
     cap = overrides.capacity_per_trip or float(ui_config.get("capacity_per_trip", 1200))
     smooth = overrides.smoothness_max_delta

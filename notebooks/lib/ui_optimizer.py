@@ -1,4 +1,4 @@
-"""Single-route analytical schedule optimization for Streamlit UI."""
+"""Single-route analytical schedule optimization for the optimizer API."""
 
 from __future__ import annotations
 
@@ -9,7 +9,14 @@ import pandas as pd
 
 from . import single_route_pipeline as srp
 from .ui_constraints import ConstraintOverrides, apply_post_opt_constraints, compute_binding_stats
-from .ui_lambda import LAMBDA_BALANCED, LAMBDA_WAIT
+from .ui_lambda import LAMBDA_BALANCED, LAMBDA_WAIT, lambda_for_preset, route_lambda_knee
+
+
+def resolve_lambda_ref(route_id: str, ui_config: dict[str, Any] | None) -> float:
+    cfg = ui_config or {}
+    if cfg.get("use_per_route_lambda"):
+        return route_lambda_knee(route_id, cfg)
+    return float(cfg.get("lambda_opt", LAMBDA_BALANCED))
 
 
 def optimize_schedule_analytical(
@@ -18,8 +25,17 @@ def optimize_schedule_analytical(
     lambda_cost: float,
     trips_min: np.ndarray,
     trips_max: np.ndarray,
+    cycle_time_min: np.ndarray | None = None,
 ) -> np.ndarray:
-    """Per-slot optimum: min D·30/t + λ·t  →  t* = sqrt(30·D/λ), clip bounds."""
+    """Per-slot Pareto scan: min D·30/t + λ·(t·cycle/60) → t* = sqrt(1800·D/(λ·cycle))."""
+    if cycle_time_min is not None:
+        return srp.analytical_trips_per_slot(
+            demand,
+            lambda_cost,
+            cycle_time_min,
+            trips_min=trips_min,
+            trips_max=trips_max,
+        )
     lam = float(lambda_cost)
     tmin = np.asarray(trips_min, dtype=float)
     tmax = np.asarray(trips_max, dtype=float)
@@ -198,6 +214,17 @@ def optimize_route_day(
     if constraint_overrides is not None and constraint_overrides.lambda_cost is not None:
         lam = float(constraint_overrides.lambda_cost)
 
+    cfg = ui_config or {}
+    if lambda_ref == LAMBDA_BALANCED and ui_config is not None:
+        lambda_ref = resolve_lambda_ref(route_id, ui_config)
+        opt_kwargs["lambda_ref"] = lambda_ref
+
+    wait_lam = (
+        lambda_for_preset(route_id, "wait", cfg)
+        if cfg.get("use_per_route_lambda")
+        else LAMBDA_WAIT
+    )
+
     opt_trips = optimize_schedule_analytical_anchored(
         slot_demand,
         lambda_cost=lam,
@@ -205,12 +232,11 @@ def optimize_route_day(
     )
     wait_focus_trips = optimize_schedule_analytical_anchored(
         slot_demand,
-        lambda_cost=LAMBDA_WAIT,
+        lambda_cost=wait_lam,
         **opt_kwargs,
     )
 
     overrides = constraint_overrides or ConstraintOverrides()
-    cfg = ui_config or {}
     slots_full = {**slots, "slot_route": np.full(n, str(route_id), dtype=object), "baseline_trips": baseline}
     opt_trips = apply_post_opt_constraints(
         opt_trips,
@@ -235,23 +261,37 @@ def optimize_route_day(
     binding = compute_binding_stats(opt_trips, tmin, tmax, slots["slot_hour"])
 
     slot_route = np.full(n, str(route_id), dtype=object)
-    base_metrics = srp.compute_wait_with_overflow(
+    cycle_times = optimizer_state.get("cycle_times")
+    fleet_cap = optimizer_state.get("system_fleet_capacity")
+    fb = optimizer_state.get("fleet_by_route_dir")
+    if isinstance(fb, pd.DataFrame) and len(fb):
+        sub = fb[fb["route_id"].astype(str) == str(route_id)]
+        if len(sub):
+            fleet_cap = float(sub["fleet_size"].sum())
+    ct_map = srp.cycle_times_to_map(cycle_times) if cycle_times is not None else {}
+    cycle_per_slot = np.array(
+        [float(ct_map.get((str(route_id), int(d)), 90.0)) for d in slots["slot_dir"]],
+        dtype=float,
+    )
+    base_metrics = srp.compute_schedule_metrics(
         slot_demand,
         baseline,
         slot_route=slot_route,
         slot_dir=slots["slot_dir"],
         slot_hour=slots["slot_hour"],
         capacity_per_trip=capacity_per_trip,
-        lambda_cost=lambda_cost,
+        cycle_times=cycle_times,
+        system_fleet_capacity=fleet_cap,
     )
-    opt_metrics = srp.compute_wait_with_overflow(
+    opt_metrics = srp.compute_schedule_metrics(
         slot_demand,
         opt_trips,
         slot_route=slot_route,
         slot_dir=slots["slot_dir"],
         slot_hour=slots["slot_hour"],
         capacity_per_trip=capacity_per_trip,
-        lambda_cost=lambda_cost,
+        cycle_times=cycle_times,
+        system_fleet_capacity=fleet_cap,
     )
 
     detail = pd.DataFrame(

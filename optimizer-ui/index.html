@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MTA Optimizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/optimizer/static/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
+  <script src="/optimizer/static/app.js" type="module" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar__brand">
+      <a href="/" class="topbar__back">← Landing</a>
+      <h1>MTA Schedule Optimizer</h1>
+    </div>
+    <p class="topbar__meta" id="model-meta">Đang tải…</p>
+  </header>
+
+  <main class="layout">
+    <aside class="panel panel--controls">
+      <form id="opt-form" class="form">
+        <label class="field">
+          <span>Tuyến</span>
+          <select id="route-id" name="route_id" required></select>
+        </label>
+
+        <fieldset class="field">
+          <legend>Trade-off chờ vs vehicle-hours</legend>
+          <div id="tradeoff-presets" class="preset-grid"></div>
+          <p id="tradeoff-hint" class="hint"></p>
+        </fieldset>
+
+        <label class="field">
+          <span>Nguồn demand</span>
+          <select id="input-mode" name="input_mode">
+            <option value="date">Theo ngày cụ thể</option>
+            <option value="scenario">Kịch bản tổng quát</option>
+          </select>
+        </label>
+
+        <div id="date-fields">
+          <label class="field">
+            <span>Ngày</span>
+            <input type="date" id="selected-date" name="selected_date" />
+          </label>
+        </div>
+
+        <div id="scenario-fields" hidden>
+          <label class="field">
+            <span>Ngày thường / cuối tuần</span>
+            <select id="weekday-weekend" name="weekday_weekend"></select>
+          </label>
+          <label class="field">
+            <span>Mùa</span>
+            <select id="season" name="season"></select>
+          </label>
+          <label class="field field--row">
+            <input type="checkbox" id="filter-holiday" name="filter_holiday" />
+            <span>Lọc ngày lễ</span>
+          </label>
+          <label class="field" id="holiday-wrap" hidden>
+            <span>Ngày lễ</span>
+            <select id="holiday-name" name="holiday_name">
+              <option value="">Tất cả ngày lễ</option>
+            </select>
+          </label>
+          <label class="field field--row">
+            <input type="checkbox" id="filter-major" name="filter_major_event" />
+            <span>Sự kiện lớn</span>
+          </label>
+        </div>
+
+        <label class="field">
+          <span>Nhóm thời tiết</span>
+          <select id="weather-group" name="weather_group"></select>
+        </label>
+
+        <label class="field field--row">
+          <input type="checkbox" id="use-route-fleet" name="use_route_fleet" checked />
+          <span>Giới hạn fleet theo tuyến</span>
+        </label>
+
+        <button type="submit" class="btn btn--primary" id="run-btn">Chạy tối ưu</button>
+      </form>
+    </aside>
+
+    <section class="panel panel--results">
+      <div id="status" class="status status--idle">
+        Chọn tham số và bấm <strong>Chạy tối ưu</strong>.
+      </div>
+
+      <div id="alerts"></div>
+
+      <div id="metrics" class="metrics" hidden>
+        <article class="metric">
+          <h3>Chờ TB (phút)</h3>
+          <p class="metric__value" id="m-wait">—</p>
+          <p class="metric__delta" id="m-wait-d">—</p>
+        </article>
+        <article class="metric">
+          <h3>Vehicle-hours</h3>
+          <p class="metric__value" id="m-vh">—</p>
+          <p class="metric__delta" id="m-vh-d">—</p>
+        </article>
+        <article class="metric">
+          <h3>Quá tải (cao điểm)</h3>
+          <p class="metric__value" id="m-risk">—</p>
+          <p class="metric__delta" id="m-risk-d">—</p>
+        </article>
+      </div>
+
+      <div class="chart-wrap" id="chart-wrap" hidden>
+        <canvas id="main-chart" height="120"></canvas>
+      </div>
+
+      <div class="table-wrap" id="table-wrap" hidden>
+        <div class="table-toolbar">
+          <h2>Lịch theo giờ</h2>
+          <button type="button" class="btn btn--ghost" id="csv-btn">Tải CSV</button>
+        </div>
+        <div class="table-scroll">
+          <table id="schedule-table">
+            <thead>
+              <tr>
+                <th>Giờ</th>
+                <th>Demand GTFS</th>
+                <th>Demand AI</th>
+                <th>Trips GTFS</th>
+                <th>Trips AI</th>
+                <th>Headway GTFS</th>
+                <th>Headway AI</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

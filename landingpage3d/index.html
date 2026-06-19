@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NYC Subway Scheduling Optimization — 3D Experience</title>
+  <meta name="description" content="A scroll journey through open landscape — AI-driven schedule optimization for the MTA." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/src/styles/tokens.css" />
+  <link rel="stylesheet" href="/src/styles/layout.css" />
+  <link rel="stylesheet" href="/src/styles/sections.css" />
+  <link rel="stylesheet" href="/src/styles/form.css" />
+</head>
+<body>
+
+  <div id="progress-bar" class="progress-bar" aria-hidden="true"></div>
+
+  <nav id="navbar" class="navbar" aria-label="Main navigation">
+    <div class="nav-inner">
+      <a href="#hero" class="nav-logo">
+        <svg class="nav-logo-icon" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+          <circle cx="14" cy="14" r="13" stroke="currentColor" stroke-width="2"/>
+          <circle cx="14" cy="14" r="5" fill="currentColor"/>
+        </svg>
+        <span>MTA Optimizer</span>
+      </a>
+      <div class="nav-links">
+        <a href="#section-cost">Cost</a>
+        <a href="#section-wait">Wait Time</a>
+        <a href="#section-terminal">Summary</a>
+      </div>
+    </div>
+  </nav>
+
+  <div id="spline-layer" class="spline-layer" aria-hidden="true">
+    <canvas id="spline-canvas"></canvas>
+    <div id="spline-placeholder" class="spline-placeholder">
+      <div class="spline-placeholder__gradient"></div>
+      <p id="spline-status" class="spline-placeholder__status">Loading scene…</p>
+    </div>
+  </div>
+
+  <div id="scroll-root" class="scroll-root">
+
+    <section id="hero" class="section section--hero" data-section="0">
+      <div class="section-panel section-panel--left" data-reveal>
+        <p class="section-badge" data-fade>K63 Thesis — UTC2</p>
+        <h1 class="hero-title">
+          <span class="line-wrap" data-split><span class="line-inner">NYC Subway</span></span>
+          <span class="line-wrap" data-split><span class="line-inner">Schedule</span></span>
+          <span class="line-wrap hero-title-accent" data-split><span class="line-inner">Optimization</span></span>
+        </h1>
+        <p class="hero-subtitle" data-fade>
+          Predict ridership. Optimize headways. Balance operating cost and passenger wait time.
+        </p>
+        <div class="hero-scroll-hint" data-fade>
+          <span>Scroll</span>
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M10 4L10 16M5 11L10 16L15 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <section id="section-cost" class="section section--cost" data-section="1">
+      <div class="section-panel section-panel--right" data-reveal>
+        <p class="section-label" data-fade>Along the line</p>
+        <h2 class="section-heading">
+          <span class="line-wrap" data-split><span class="line-inner">Cost</span></span>
+          <span class="line-wrap" data-split><span class="line-inner">Optimization</span></span>
+        </h2>
+        <p class="section-text" data-fade>
+          Match fleet deployment to real demand. Fewer empty runs, smarter trade-offs between service frequency and operating budget.
+        </p>
+      </div>
+    </section>
+
+    <section id="section-wait" class="section section--wait" data-section="2">
+      <div class="section-panel section-panel--left" data-reveal>
+        <p class="section-label" data-fade>Midtown platform</p>
+        <h2 class="section-heading">
+          <span class="line-wrap" data-split><span class="line-inner">Wait Time</span></span>
+          <span class="line-wrap" data-split><span class="line-inner">Optimization</span></span>
+        </h2>
+        <p class="section-text" data-fade>
+          Tighter headways when crowds surge. Consolidated trips when demand fades — keeping every stop predictable.
+        </p>
+      </div>
+    </section>
+
+    <section id="section-terminal" class="section section--terminal" data-section="3">
+      <div class="terminal-grid" data-reveal>
+        <div class="terminal-summary section-panel">
+          <p class="section-label" data-fade>Final stop</p>
+          <h2 class="section-heading">
+            <span class="line-wrap" data-split><span class="line-inner">Journey</span></span>
+            <span class="line-wrap" data-split><span class="line-inner">complete</span></span>
+          </h2>
+          <p class="section-text" data-fade>
+            The train reaches the terminal — schedules optimized, every stop served. From departure board to last platform, the full pipeline delivers a smarter timetable.
+          </p>
+          <ul class="topic-list" data-fade>
+            <li>Forecast passenger demand hour by hour</li>
+            <li>Adjust trip frequency with constrained optimization</li>
+            <li>Balance rider comfort against fleet operating cost</li>
+          </ul>
+          <div class="terminal-cta" data-fade>
+            <a href="#" id="cta-dashboard" class="cta-button cta-button--primary">
+              View Dashboard
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </a>
+          </div>
+          <footer class="footer-info" data-fade>
+            <p>University of Transport and Communications — K63</p>
+          </footer>
+        </div>
+
+        <div class="feedback-form-wrap section-panel" data-fade>
+          <h3 class="form-title">Your feedback</h3>
+          <p class="form-subtitle">Demo only — not saved.</p>
+          <form id="feedback-form" class="feedback-form" novalidate>
+            <label class="form-field">
+              <span class="form-label">Name</span>
+              <input type="text" name="name" placeholder="Optional" autocomplete="name" />
+            </label>
+            <label class="form-field">
+              <span class="form-label">Comment</span>
+              <textarea name="comment" rows="3" placeholder="Thoughts on the schedule?"></textarea>
+            </label>
+            <button type="button" id="form-submit-demo" class="cta-button cta-button--ghost form-submit">
+              Send
+            </button>
+            <p id="form-toast" class="form-toast" role="status" aria-live="polite" hidden>
+              Demo form — submissions are not collected.
+            </p>
+          </form>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
