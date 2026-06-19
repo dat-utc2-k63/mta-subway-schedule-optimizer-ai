@@ -14,7 +14,7 @@ from . import single_route_pipeline as srp
 @dataclass
 class ConstraintOverrides:
     use_route_fleet: bool = True
-    use_system_fleet: bool = True
+    use_system_fleet: bool = False
     use_capacity: bool = True
     use_smoothness: bool = True
     max_system_fleet: float | None = None
@@ -38,7 +38,7 @@ def default_constraint_panel(ui_config: dict[str, Any]) -> dict[str, Any]:
     """Defaults for UI — all values from ui_config.json."""
     return {
         "use_route_fleet": True,
-        "use_system_fleet": True,
+        "use_system_fleet": False,
         "use_capacity": True,
         "use_smoothness": True,
         "max_system_fleet": float(ui_config["max_system_fleet"]),
@@ -124,7 +124,7 @@ def validate_constraint_config(
             "Giảm trips_min_factor hoặc tăng trips_*_max_factor / max_headway_min.",
         )
 
-    if overrides.max_system_fleet is not None:
+    if overrides.use_system_fleet and overrides.max_system_fleet is not None:
         fleet_df = optimizer_state.get("fleet_by_route_dir")
         min_fleet = _min_system_fleet_required(fleet_df)
         if overrides.max_system_fleet < min_fleet * 0.5:

@@ -2308,7 +2308,10 @@ def predict_with_uncertainty_mcdropout(
     n_samples: int = 50,
     training: bool = True,
 ) -> dict[str, np.ndarray]:
-    """MC Dropout: n forward passes với dropout active → mean/std/percentiles residual."""
+    """Deprecated: không dùng trong pipeline chính — giữ lại cho backward compat.
+
+    MC Dropout: n forward passes với dropout active → mean/std/percentiles residual.
+    """
     samples: list[np.ndarray] = []
     for _ in range(int(n_samples)):
         pred = model(X, training=training)
@@ -2651,3 +2654,407 @@ def regression_metrics(
         "mape_pct": mape,
         "smape_pct": smape(yt, yp),
     }
+
+
+# --- Module 1–3: lịch chi tiết ga, fleet sweep-line, mô phỏng trễ ---
+
+
+def build_station_schedule_for_route(
+    opt_trips: np.ndarray,
+    slot_route: np.ndarray,
+    slot_dir: np.ndarray,
+    slot_hour: np.ndarray,
+    schedule_dir: Path,
+    route_id: str,
+    *,
+    offset_templates: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    """Lấy slot của 1 route từ kết quả optimizer, build schedule rồi expand ra từng ga."""
+    mask = np.asarray(slot_route) == str(route_id)
+    sched_df = pd.DataFrame({
+        "route_id": np.asarray(slot_route)[mask],
+        "direction_id": np.asarray(slot_dir)[mask],
+        "hour": np.asarray(slot_hour)[mask],
+        "opt_trips": np.asarray(opt_trips)[mask],
+    })
+    return expand_schedule_to_station_times(
+        sched_df,
+        schedule_dir,
+        offset_templates=offset_templates,
+        route_id=str(route_id),
+    )
+
+
+def assign_trip_ids(station_schedule: pd.DataFrame) -> pd.DataFrame:
+    """Gán trip_id (0,1,2,...) theo thứ tự khởi hành trong mỗi (route, direction)."""
+    out = station_schedule.copy()
+    if out.empty:
+        out["trip_id"] = pd.Series(dtype=int)
+        return out
+
+    gcols = ["route", "direction", "hour"]
+    min_seq = out.groupby(gcols)["stop_sequence"].transform("min")
+    out["_is_first"] = out["stop_sequence"] == min_seq
+
+    def _stop_offsets(sub: pd.DataFrame) -> pd.DataFrame:
+        sub = sub.copy()
+        first_dep = sub.loc[sub["stop_sequence"] == sub["stop_sequence"].min(), "scheduled_min"].iloc[0]
+        sub["_offset"] = sub["scheduled_min"] - float(first_dep)
+        return sub
+
+    parts: list[pd.DataFrame] = []
+    for _, sub in out.groupby(gcols, sort=False):
+        parts.append(_stop_offsets(sub))
+    out = pd.concat(parts).sort_index()
+    out["_first_dep_key"] = (out["scheduled_min"] - out["_offset"]).round(4)
+
+    trip_map = (
+        out.drop_duplicates(["route", "direction", "_first_dep_key"])
+        .sort_values(["route", "direction", "scheduled_min"])
+        .assign(trip_id=lambda d: d.groupby(["route", "direction"]).cumcount())
+        [["route", "direction", "_first_dep_key", "trip_id"]]
+    )
+    out = out.merge(trip_map, on=["route", "direction", "_first_dep_key"], how="left")
+    drop_cols = ["_is_first", "_offset", "_first_dep_key"]
+    out = out.drop(columns=[c for c in drop_cols if c in out.columns])
+    return out.sort_values(["route", "direction", "trip_id", "stop_sequence"]).reset_index(drop=True)
+
+
+def _generate_route_direction_departures(
+    trips: np.ndarray,
+    hours: np.ndarray,
+) -> list[float]:
+    """Sinh departure_min cho từng trip — cùng convention với expand_schedule_to_station_times."""
+    departures: list[float] = []
+    slot_trips = np.maximum(np.asarray(trips, dtype=float), 0.0)
+    slot_hours = np.asarray(hours, dtype=int)
+    for n_trips, hour in zip(slot_trips, slot_hours):
+        n = int(round(n_trips))
+        if n <= 0:
+            continue
+        hour_start = int(hour) * 60
+        spacing = 60.0 / n
+        for trip_i in range(n):
+            departures.append(hour_start + (trip_i + 0.5) * spacing)
+    return departures
+
+
+def _fleet_sweep_max(departures: list[float], cycle_time_min: float) -> float:
+    """Sweep-line: max số tàu đồng thời trên timeline [0, 1440) với wrap-around."""
+    cycle = max(float(cycle_time_min), 1e-6)
+    day_min = 1440.0
+    events: list[tuple[float, int]] = []
+    for dep in departures:
+        d = float(dep)
+        end = d + cycle
+        events.append((d, 1))
+        if end <= day_min:
+            events.append((end, -1))
+        else:
+            events.append((0.0, 1))
+            events.append((end - day_min, -1))
+    if not events:
+        return 0.0
+    events.sort(key=lambda x: (x[0], x[1]))
+    running = 0.0
+    peak = 0.0
+    for t, delta in events:
+        if t > day_min:
+            break
+        running += delta
+        peak = max(peak, running)
+    return float(peak)
+
+
+def compute_fleet_continuous_sweep(
+    trips: np.ndarray,
+    slot_route: np.ndarray,
+    slot_dir: np.ndarray,
+    slot_hour: np.ndarray,
+    cycle_times: pd.DataFrame,
+) -> tuple[pd.DataFrame, float]:
+    """Fleet chính xác bằng sweep-line trên timeline liên tục (Module 2)."""
+    ct = cycle_times.set_index(["route_id", "direction_id"])["cycle_time_min"]
+    median_cycle = float(ct.median()) if len(ct) else 90.0
+
+    lb_df, _lb_system = compute_fleet_limits_from_baseline(
+        trips, slot_route, slot_dir, slot_hour, cycle_times
+    )
+    lb_map = lb_df.set_index(["route_id", "direction_id"])["fleet_size"]
+
+    routes = np.asarray(slot_route)
+    dirs = np.asarray(slot_dir, dtype=int)
+    hours = np.asarray(slot_hour, dtype=int)
+    trip_arr = np.asarray(trips, dtype=float)
+
+    groups: dict[tuple[str, int], list[int]] = {}
+    for i in range(len(trip_arr)):
+        groups.setdefault((str(routes[i]), int(dirs[i])), []).append(i)
+
+    rows: list[dict[str, Any]] = []
+    all_events: list[tuple[float, int]] = []
+
+    for (rid, direction), indices in sorted(groups.items()):
+        dep_list = _generate_route_direction_departures(
+            trip_arr[indices], hours[indices]
+        )
+        cycle = float(ct.get((rid, direction), np.nan))
+        if not np.isfinite(cycle) or cycle <= 0:
+            cycle = median_cycle
+        fleet_cont = _fleet_sweep_max(dep_list, cycle)
+        fleet_lb = float(lb_map.get((rid, direction), 0.0))
+        pct_under = (
+            (fleet_cont - fleet_lb) / max(fleet_cont, 1e-9) * 100.0
+            if fleet_cont > 0
+            else 0.0
+        )
+        rows.append(
+            dict(
+                route_id=rid,
+                direction_id=direction,
+                fleet_size=round(fleet_cont, 3),
+                fleet_size_lower_bound=round(fleet_lb, 3),
+                fleet_size_continuous=round(fleet_cont, 3),
+                pct_underestimate=round(pct_under, 3),
+            )
+        )
+        for dep in dep_list:
+            end = dep + cycle
+            all_events.append((dep, 1))
+            if end <= 1440.0:
+                all_events.append((end, -1))
+            else:
+                all_events.append((0.0, 1))
+                all_events.append((end - 1440.0, -1))
+
+    system_max = 0.0
+    if all_events:
+        all_events.sort(key=lambda x: (x[0], x[1]))
+        running = 0.0
+        for t, delta in all_events:
+            if t > 1440.0:
+                break
+            running += delta
+            system_max = max(system_max, running)
+
+    return pd.DataFrame(rows), float(system_max)
+
+
+def compare_fleet_estimates(
+    baseline_trips: np.ndarray,
+    slot_route: np.ndarray,
+    slot_dir: np.ndarray,
+    slot_hour: np.ndarray,
+    cycle_times: pd.DataFrame,
+) -> pd.DataFrame:
+    """So sánh fleet lower-bound (Little's Law) vs continuous sweep-line."""
+    cont_df, _ = compute_fleet_continuous_sweep(
+        baseline_trips, slot_route, slot_dir, slot_hour, cycle_times
+    )
+    return (
+        cont_df.rename(
+            columns={
+                "fleet_size_lower_bound": "fleet_lower_bound",
+                "fleet_size_continuous": "fleet_continuous",
+            }
+        )[
+            ["route_id", "direction_id", "fleet_lower_bound", "fleet_continuous", "pct_underestimate"]
+        ]
+        .sort_values("pct_underestimate", ascending=False)
+        .reset_index(drop=True)
+    )
+
+
+def simulate_delay_propagation(
+    station_schedule: pd.DataFrame,
+    *,
+    route_id: str,
+    direction_id: int,
+    delayed_trip_id: int,
+    delay_min: float,
+    delay_at_stop_sequence: int,
+    min_headway_ratio: float = 0.6,
+    max_propagation_trips: int = 3,
+    dwell_recovery_min: float = 0.5,
+) -> pd.DataFrame:
+    """Mô phỏng lan truyền trễ tối thiểu trên lịch chi tiết ga (Module 3)."""
+    if "trip_id" not in station_schedule.columns:
+        raise ValueError("station_schedule cần cột trip_id — gọi assign_trip_ids() trước")
+
+    out = station_schedule.copy()
+    out["actual_min"] = out["scheduled_min"].astype(float)
+    out["delay_applied_min"] = 0.0
+    out["is_affected"] = False
+    out["propagation_hop"] = np.nan
+
+    route_col = "route" if "route" in out.columns else "route_id"
+    dir_col = "direction" if "direction" in out.columns else "direction_id"
+    mask = (
+        out[route_col].astype(str) == str(route_id)
+    ) & (out[dir_col].astype(int) == int(direction_id))
+    if not mask.any():
+        raise ValueError(f"Không có dữ liệu cho route={route_id!r} direction={direction_id}")
+
+    sub_idx = out.index[mask]
+
+    trips = sorted(out.loc[sub_idx, "trip_id"].unique())
+    if delayed_trip_id not in trips:
+        raise ValueError(f"delayed_trip_id={delayed_trip_id} không có trong lịch")
+
+    def _apply_delay_to_trip(tid: int, base_delay: float, at_seq: int, hop: int) -> None:
+        tmask = mask & (out["trip_id"] == tid)
+        for idx in out.index[tmask]:
+            seq = int(out.at[idx, "stop_sequence"])
+            if seq < at_seq:
+                continue
+            extra = max(0.0, base_delay - dwell_recovery_min * (seq - at_seq))
+            sched = float(out.at[idx, "scheduled_min"])
+            out.at[idx, "actual_min"] = sched + extra
+            out.at[idx, "delay_applied_min"] = extra
+            out.at[idx, "is_affected"] = True
+            out.at[idx, "propagation_hop"] = float(hop)
+
+    _apply_delay_to_trip(
+        int(delayed_trip_id), float(delay_min), int(delay_at_stop_sequence), hop=0
+    )
+
+    pos = trips.index(int(delayed_trip_id))
+    for hop in range(1, int(max_propagation_trips) + 1):
+        if pos + hop >= len(trips):
+            break
+        trip_before = int(trips[pos + hop - 1])
+        trip_after = int(trips[pos + hop])
+
+        stops_after = (
+            out.loc[mask & (out["trip_id"] == trip_after)]
+            .sort_values("stop_sequence")
+        )
+        violated = False
+        for _, row in stops_after.iterrows():
+            seq = int(row["stop_sequence"])
+            before = out.loc[mask & (out["trip_id"] == trip_before) & (out["stop_sequence"] == seq)]
+            if before.empty:
+                continue
+            headway_planned = float(row["scheduled_min"]) - float(before["scheduled_min"].iloc[0])
+            if headway_planned <= 0:
+                continue
+            actual_before = float(before["actual_min"].iloc[0])
+            headway_if_no_fix = float(row["scheduled_min"]) - actual_before
+            if headway_if_no_fix < float(min_headway_ratio) * headway_planned:
+                hold_min = float(min_headway_ratio) * headway_planned - headway_if_no_fix
+                violated = True
+                for idx in out.index[mask & (out["trip_id"] == trip_after) & (out["stop_sequence"] >= seq)]:
+                    seq2 = int(out.at[idx, "stop_sequence"])
+                    decayed = max(0.0, hold_min - dwell_recovery_min * (seq2 - seq))
+                    sched = float(out.at[idx, "scheduled_min"])
+                    out.at[idx, "actual_min"] = max(float(out.at[idx, "actual_min"]), sched + decayed)
+                    applied = float(out.at[idx, "actual_min"]) - sched
+                    out.at[idx, "delay_applied_min"] = applied
+                    out.at[idx, "is_affected"] = True
+                    out.at[idx, "propagation_hop"] = float(hop)
+                break
+
+        if not violated:
+            break
+
+    out["actual_time"] = out["actual_min"].map(_minutes_to_hhmm)
+    if "delay_applied_min" not in out.columns:
+        out["delay_applied_min"] = out["actual_min"] - out["scheduled_min"]
+    return out.sort_values([route_col, dir_col, "trip_id", "stop_sequence"]).reset_index(drop=True)
+
+
+def summarize_delay_impact(adjusted_schedule: pd.DataFrame) -> dict[str, Any]:
+    """Tóm tắt ảnh hưởng mô phỏng trễ."""
+    df = adjusted_schedule.copy()
+    if "is_affected" not in df.columns:
+        return dict(
+            n_trips_affected=0,
+            n_stops_affected=0,
+            max_hold_min=0.0,
+            total_hold_min=0.0,
+            affected_trip_ids=[],
+            worst_stop=None,
+        )
+
+    affected = df[df["is_affected"].astype(bool)].copy()
+    delay_col = "delay_applied_min" if "delay_applied_min" in affected.columns else None
+    if delay_col is None:
+        affected["delay_applied_min"] = affected["actual_min"] - affected["scheduled_min"]
+        delay_col = "delay_applied_min"
+
+    worst_stop = None
+    if not affected.empty:
+        wi = affected["delay_applied_min"].idxmax()
+        worst_stop = dict(
+            parent_stop_id=str(affected.at[wi, "parent_stop_id"]) if "parent_stop_id" in affected.columns else "",
+            stop_name=str(affected.at[wi, "stop_name"]) if "stop_name" in affected.columns else "",
+            max_delay_min=float(affected.at[wi, delay_col]),
+        )
+
+    trip_ids = sorted({int(x) for x in affected["trip_id"].unique()}) if "trip_id" in affected.columns else []
+    return dict(
+        n_trips_affected=int(affected["trip_id"].nunique()) if "trip_id" in affected.columns else 0,
+        n_stops_affected=int(len(affected)),
+        max_hold_min=float(affected[delay_col].max()) if not affected.empty else 0.0,
+        total_hold_min=float(affected[delay_col].sum()) if not affected.empty else 0.0,
+        affected_trip_ids=trip_ids,
+        worst_stop=worst_stop,
+    )
+
+
+def plot_delay_propagation(
+    adjusted_schedule: pd.DataFrame,
+    *,
+    route_id: str,
+    direction_id: int,
+    ax: Any | None = None,
+    title: str = "Delay propagation",
+    save_path: Path | str | None = None,
+) -> Any:
+    """Time-distance diagram: actual_min vs stop_sequence theo trip."""
+    import matplotlib.pyplot as plt
+
+    route_col = "route" if "route" in adjusted_schedule.columns else "route_id"
+    dir_col = "direction" if "direction" in adjusted_schedule.columns else "direction_id"
+
+    sub = adjusted_schedule[
+        (adjusted_schedule[route_col].astype(str) == str(route_id))
+        & (adjusted_schedule[dir_col].astype(int) == int(direction_id))
+    ].copy()
+    if sub.empty:
+        raise ValueError("Không có dữ liệu để vẽ")
+
+    if ax is None:
+        _, ax = plt.subplots(figsize=(10, 6))
+
+    time_col = "actual_min" if "actual_min" in sub.columns else "scheduled_min"
+    for tid, grp in sub.groupby("trip_id"):
+        grp = grp.sort_values("stop_sequence")
+        hop = grp["propagation_hop"].dropna()
+        hop_val = float(hop.iloc[0]) if len(hop) else np.nan
+        affected = bool(grp["is_affected"].any()) if "is_affected" in grp.columns else False
+        if affected and hop_val == 0:
+            color, lw, alpha = "#d62728", 2.0, 0.95
+        elif affected and hop_val >= 1:
+            color, lw, alpha = "#ff7f0e", 1.6, max(0.35, 0.85 - 0.15 * hop_val)
+        else:
+            color, lw, alpha = "#bdbdbd", 0.8, 0.45
+        ax.plot(
+            grp[time_col],
+            grp["stop_sequence"],
+            color=color,
+            linewidth=lw,
+            alpha=alpha,
+            marker="o",
+            markersize=3,
+            label=f"trip {int(tid)}" if affected else None,
+        )
+
+    ax.set_xlabel("Thời gian (phút từ 00:00)")
+    ax.set_ylabel("stop_sequence")
+    ax.set_title(title)
+    ax.grid(True, alpha=0.3)
+    if save_path is not None:
+        ax.figure.tight_layout()
+        ax.figure.savefig(save_path, dpi=120, bbox_inches="tight")
+    return ax

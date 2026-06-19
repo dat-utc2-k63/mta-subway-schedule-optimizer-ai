@@ -285,26 +285,6 @@ def apply_manual_weather(hourly: pd.DataFrame, manual: dict[str, float | int] | 
     return out
 
 
-def render_system_fleet_setting(ui_config: dict) -> dict[str, float | bool]:
-    """Giới hạn fleet toàn mạng — độc lập với tuyến đang xem."""
-    default_cap = float(ui_config["max_system_fleet"])
-    st.markdown("**Toàn mạng subway**")
-    use_cap = st.checkbox(
-        "Bật giới hạn số xe chạy đồng thời",
-        value=True,
-        help="Ràng buộc áp dụng cho toàn hệ thống, không chỉ tuyến đang chọn.",
-    )
-    cap = st.number_input(
-        "Số xe tối đa (toàn mạng)",
-        value=default_cap,
-        min_value=1.0,
-        step=10.0,
-        disabled=not use_cap,
-        help=f"Mặc định từ model: {default_cap:.0f} xe.",
-    )
-    return {"max_system_fleet": float(cap), "use_system_fleet": use_cap}
-
-
 _OPT_TARGET_VI: dict[str, str] = {
     "objective": "Tổng hợp (chờ + chi phí)",
     "wait": "Ưu tiên giảm thời gian chờ",
@@ -313,21 +293,18 @@ _OPT_TARGET_VI: dict[str, str] = {
 _OPT_TARGET_KEYS = list(_OPT_TARGET_VI.keys())
 
 
-def render_constraint_panel(ui_config: dict, *, max_system_fleet: float, use_system_fleet: bool) -> dict:
-    """Ràng buộc nâng cao — nhãn tiếng Việt; fleet toàn mạng đặt ngoài panel."""
+def render_constraint_panel(ui_config: dict, *, use_route_fleet: bool) -> dict:
+    """Ràng buộc nâng cao — mặc định chỉ fleet theo tuyến (không cap toàn mạng)."""
     defaults = default_constraint_panel(ui_config)
-    defaults["max_system_fleet"] = max_system_fleet
-    defaults["use_system_fleet"] = use_system_fleet
+    defaults["use_route_fleet"] = use_route_fleet
+    defaults["use_system_fleet"] = False
+
     with st.expander("Ràng buộc nâng cao (tuỳ chọn)", expanded=False):
         enabled = st.checkbox("Bật tùy chỉnh ràng buộc", value=False)
         if not enabled:
             return defaults
         c1, c2 = st.columns(2)
         with c1:
-            use_route_fleet = st.checkbox(
-                "Giới hạn xe theo tuyến",
-                value=defaults["use_route_fleet"],
-            )
             use_capacity = st.checkbox(
                 "Đảm bảo đủ chỗ ngồi",
                 value=defaults["use_capacity"],
@@ -395,10 +372,9 @@ def render_constraint_panel(ui_config: dict, *, max_system_fleet: float, use_sys
         return {
             **defaults,
             "use_route_fleet": use_route_fleet,
-            "use_system_fleet": use_system_fleet,
+            "use_system_fleet": False,
             "use_capacity": use_capacity,
             "use_smoothness": use_smoothness,
-            "max_system_fleet": max_system_fleet,
             "capacity_per_trip": capacity_per_trip,
             "smoothness_max_delta": int(smoothness),
             "min_headway_min": min_headway,
@@ -627,12 +603,15 @@ def main() -> None:
     st.markdown('<p class="hero-title">MTA · Tối ưu lịch trình</p>', unsafe_allow_html=True)
 
     with st.sidebar:
-        fleet_settings = render_system_fleet_setting(ui_config)
-        st.markdown("---")
         _, lambda_cost = render_pareto_selector()
         st.markdown("---")
 
         route_id = st.selectbox("Tuyến cần xem", routes, index=routes.index("1") if "1" in routes else 0)
+        use_route_fleet = st.checkbox(
+            "Giới hạn số xe theo tuyến",
+            value=True,
+            help="Giới hạn turnaround/fleet từng (tuyến × hướng) theo lịch GTFS baseline.",
+        )
 
         input_mode = st.radio(
             "Nguồn demand",
@@ -709,11 +688,7 @@ def main() -> None:
             )
 
         st.markdown("---")
-        constraint_panel = render_constraint_panel(
-            ui_config,
-            max_system_fleet=fleet_settings["max_system_fleet"],
-            use_system_fleet=bool(fleet_settings["use_system_fleet"]),
-        )
+        constraint_panel = render_constraint_panel(ui_config, use_route_fleet=use_route_fleet)
 
         manual_weather: dict[str, float | int] | None = None
         with st.expander("Tuỳ chỉnh thủ công (nâng cao)", expanded=False):
