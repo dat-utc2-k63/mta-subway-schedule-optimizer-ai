@@ -1,9 +1,12 @@
 const API = "";
 
 let meta = null;
+let mode = "date";
 let selectedPreset = "balanced";
 let chart = null;
-let lastCsvRows = null;
+let dateProfile = null;
+let overridesOpen = false;
+let profileAbort = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -20,7 +23,7 @@ async function api(path, opts = {}) {
     data = { detail: text };
   }
   if (!res.ok) {
-    throw new Error(data?.detail || data?.message || `HTTP ${res.status}`);
+    throw new Error(data?.detail || `HTTP ${res.status}`);
   }
   return data;
 }
@@ -33,50 +36,6 @@ function fmt(n, digits = 0) {
   });
 }
 
-function setStatus(msg, kind = "idle") {
-  const el = $("status");
-  el.textContent = "";
-  el.className = `status status--${kind}`;
-  if (kind === "idle") {
-    el.innerHTML = msg;
-  } else {
-    el.textContent = msg;
-  }
-}
-
-function renderPresets() {
-  const wrap = $("tradeoff-presets");
-  wrap.innerHTML = "";
-  for (const p of meta.tradeoff_presets) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = `preset-btn${p.key === selectedPreset ? " is-active" : ""}`;
-    btn.dataset.preset = p.key;
-    btn.innerHTML = `<strong>${p.label}</strong><small>${p.hint}</small>`;
-    btn.addEventListener("click", () => selectPreset(p.key));
-    wrap.appendChild(btn);
-  }
-  updateTradeoffHint();
-}
-
-async function updateTradeoffHint() {
-  const route = $("route-id").value;
-  if (!route) return;
-  try {
-    const t = await api(
-      `/api/optimizer/tradeoff?route_id=${encodeURIComponent(route)}&preset=${selectedPreset}`,
-    );
-    $("tradeoff-hint").textContent = t.label;
-  } catch {
-    $("tradeoff-hint").textContent = "";
-  }
-}
-
-function selectPreset(key) {
-  selectedPreset = key;
-  renderPresets();
-}
-
 function fillSelect(el, items, valueKey = "key", labelKey = "label") {
   el.innerHTML = "";
   for (const item of items) {
@@ -87,92 +46,237 @@ function fillSelect(el, items, valueKey = "key", labelKey = "label") {
   }
 }
 
-function toggleInputMode() {
-  const mode = $("input-mode").value;
-  $("date-fields").hidden = mode !== "date";
-  $("scenario-fields").hidden = mode !== "scenario";
+function setOverrideFieldsEnabled(enabled, { dateMode = false } = {}) {
+  const fields = [
+    $("weather-group"),
+    $("filter-major"),
+    $("filter-holiday"),
+    $("weekday-weekend"),
+    $("season"),
+  ];
+  for (const el of fields) {
+    if (!el) continue;
+    if (dateMode) {
+      el.disabled = !enabled || el.id === "weekday-weekend" || el.id === "season";
+    } else {
+      el.disabled = !enabled;
+    }
+  }
+}
+
+function applyInferredToOverrides(inferred) {
+  if (!inferred) return;
+  $("weekday-weekend").value = inferred.weekday_weekend;
+  $("season").value = inferred.season;
+  $("weather-group").value = inferred.weather_group;
+  $("filter-holiday").checked = false;
+  $("filter-major").checked = inferred.filter_major_event || false;
+}
+
+function setMode(next) {
+  mode = next;
+  document.querySelectorAll(".mode-tab").forEach((t) => {
+    t.classList.toggle("is-active", t.dataset.mode === mode);
+  });
+
+  const isDate = mode === "date";
+  $("date-field").hidden = !isDate;
+  $("date-profile").hidden = isDate ? !dateProfile : true;
+  $("profile-loading").hidden = true;
+
+  if (isDate) {
+    $("overrides-hint").textContent =
+      "Ngày và mùa lấy từ lịch. Có thể đổi thời tiết hoặc sự kiện lớn để mô phỏng what-if.";
+    $("ctrl-weekday").hidden = false;
+    $("ctrl-season").hidden = false;
+    if (dateProfile) {
+      $("overrides-section").hidden = false;
+      setOverrideFieldsEnabled(true, { dateMode: true });
+      updateRunButton();
+    } else {
+      $("overrides-section").hidden = true;
+      setOverrideFieldsEnabled(false);
+    }
+  } else {
+    dateProfile = null;
+    $("overrides-section").hidden = false;
+    $("overrides-body").hidden = false;
+    $("overrides-toggle").setAttribute("aria-expanded", "true");
+    overridesOpen = true;
+    $("overrides-hint").textContent = "Tự xây kịch bản không gắn ngày cụ thể.";
+    setOverrideFieldsEnabled(true);
+    $("ctrl-weekday").hidden = false;
+    $("ctrl-season").hidden = false;
+    updateRunButton();
+  }
+}
+
+function updateRunButton() {
+  const btn = $("run-btn");
+  if (mode === "date") {
+    btn.disabled = !dateProfile;
+  } else {
+    btn.disabled = false;
+  }
+}
+
+function renderPresets() {
+  const wrap = $("preset-btns");
+  wrap.innerHTML = "";
+  for (const p of meta.presets) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = p.label.replace(" (khuyến nghị)", "");
+    btn.title = p.description;
+    btn.classList.toggle("is-active", p.key === selectedPreset);
+    btn.addEventListener("click", () => {
+      selectedPreset = p.key;
+      renderPresets();
+    });
+    wrap.appendChild(btn);
+  }
+}
+
+function renderProfile(profile) {
+  $("profile-title").textContent = profile.title;
+  $("profile-source").textContent = `Nguồn: ${profile.source}`;
+
+  const w = profile.weather || {};
+  const stats = $("profile-stats");
+  stats.innerHTML = "";
+  const pills = [];
+  if (w.temp_min_c != null && w.temp_max_c != null) {
+    pills.push(`🌡 ${fmt(w.temp_min_c, 0)}–${fmt(w.temp_max_c, 0)}°C`);
+  }
+  if (w.rain_total_mm != null) {
+    pills.push(`🌧 ${fmt(w.rain_total_mm, 1)} mm`);
+  }
+  if (w.wind_max_kmh != null) {
+    pills.push(`💨 ${fmt(w.wind_max_kmh, 0)} km/h`);
+  }
+  for (const text of pills) {
+    const span = document.createElement("span");
+    span.className = "stat-pill";
+    span.textContent = text;
+    stats.appendChild(span);
+  }
+
+  const chips = $("profile-chips");
+  chips.innerHTML = "";
+  for (const label of profile.chips || []) {
+    const span = document.createElement("span");
+    span.className = "chip";
+    span.textContent = label;
+    chips.appendChild(span);
+  }
+
+  $("date-profile").hidden = false;
+  $("empty-state").hidden = true;
+}
+
+async function fetchDateProfile(dateStr) {
+  if (!dateStr) return;
+
+  if (profileAbort) profileAbort.abort();
+  profileAbort = new AbortController();
+
+  dateProfile = null;
+  updateRunButton();
+  $("date-profile").hidden = true;
+  $("overrides-section").hidden = true;
+  $("profile-loading").hidden = false;
+  setOverrideFieldsEnabled(false);
+
+  try {
+    const profile = await api(
+      `/api/v1/date-profile?date=${encodeURIComponent(dateStr)}`,
+      { signal: profileAbort.signal },
+    );
+    dateProfile = profile;
+    renderProfile(profile);
+    applyInferredToOverrides(profile.inferred);
+    $("overrides-section").hidden = false;
+    setOverrideFieldsEnabled(true, { dateMode: true });
+    updateRunButton();
+  } catch (err) {
+    if (err.name === "AbortError") return;
+    showError(`Không lấy được dữ liệu ngày: ${err.message}`);
+    $("empty-state").hidden = false;
+  } finally {
+    $("profile-loading").hidden = true;
+  }
+}
+
+function hasOverrideChanges() {
+  if (!dateProfile?.inferred) return false;
+  const inf = dateProfile.inferred;
+  return (
+    $("weather-group").value !== inf.weather_group ||
+    $("filter-major").checked !== !!inf.filter_major_event
+  );
 }
 
 function buildPayload() {
-  const mode = $("input-mode").value;
   const payload = {
     route_id: $("route-id").value,
-    tradeoff_preset: selectedPreset,
-    input_mode: mode,
-    weather_group: $("weather-group").value,
-    use_route_fleet: $("use-route-fleet").checked,
+    preset: selectedPreset,
+    mode,
   };
+
   if (mode === "date") {
-    payload.selected_date = $("selected-date").value;
-  } else {
-    payload.weekday_weekend = $("weekday-weekend").value;
-    payload.season = $("season").value;
-    payload.filter_holiday = $("filter-holiday").checked;
-    payload.filter_major_event = $("filter-major").checked;
-    if ($("filter-holiday").checked && $("holiday-name").value) {
-      payload.holiday_name = $("holiday-name").value;
+    payload.date = $("selected-date").value;
+    if (hasOverrideChanges()) {
+      payload.use_overrides = true;
+      payload.overrides = {
+        weekday_weekend: $("weekday-weekend").value,
+        season: $("season").value,
+        weather_group: $("weather-group").value,
+        filter_holiday: $("filter-holiday").checked,
+        filter_major_event: $("filter-major").checked,
+      };
     }
+  } else {
+    payload.scenario = {
+      weekday_weekend: $("weekday-weekend").value,
+      season: $("season").value,
+      weather_group: $("weather-group").value,
+      filter_holiday: $("filter-holiday").checked,
+      filter_major_event: $("filter-major").checked,
+    };
   }
   return payload;
 }
 
-function renderAlerts(data) {
-  const wrap = $("alerts");
-  wrap.innerHTML = "";
-  if (data.context_badges?.length) {
-    const badges = document.createElement("div");
-    badges.className = "badges";
-    for (const b of data.context_badges) {
-      const span = document.createElement("span");
-      span.className = "badge";
-      span.textContent = b;
-      badges.appendChild(span);
-    }
-    wrap.appendChild(badges);
-  }
-  if (data.scenario_warning) {
-    const w = document.createElement("div");
-    w.className = "alert alert--warn";
-    w.textContent = data.scenario_warning;
-    wrap.appendChild(w);
-  }
-  if (data.factor_clip_note) {
-    const c = document.createElement("div");
-    c.className = "alert";
-    c.textContent = data.factor_clip_note;
-    wrap.appendChild(c);
+function renderContext(ctx) {
+  $("ctx-title").textContent = ctx.title || "";
+  $("ctx-sub").textContent = ctx.subtitle || "";
+  const warn = $("ctx-warn");
+  if (ctx.warning) {
+    warn.textContent = ctx.warning;
+    warn.hidden = false;
+  } else {
+    warn.hidden = true;
   }
 }
 
-function renderMetrics(m) {
-  $("metrics").hidden = false;
-  const wait = m.wait;
-  $("m-wait").textContent = fmt(wait.optimized, 1);
-  const waitGood = wait.delta > 0;
-  $("m-wait-d").textContent = `${waitGood ? "▼" : "▲"} ${fmt(Math.abs(wait.delta), 1)} vs GTFS`;
-  $("m-wait-d").className = `metric__delta ${waitGood ? "good" : "bad"}`;
+function renderSummary(s) {
+  $("kpi-wait").textContent = fmt(s.wait_min, 1);
+  const waitGood = s.wait_delta > 0;
+  $("kpi-wait-d").textContent = `${waitGood ? "▼" : "▲"} ${fmt(Math.abs(s.wait_delta), 1)} vs GTFS`;
+  $("kpi-wait-d").className = `kpi-card__delta ${waitGood ? "good" : "bad"}`;
 
-  const vh = m.vehicle_hours;
-  $("m-vh").textContent = fmt(vh.optimized, 0);
-  const vhGood = vh.delta <= 0;
-  let vhNote = `${vhGood ? "▼" : "▲"} ${fmt(Math.abs(vh.delta), 0)} vs GTFS · $${fmt(vh.cost_usd, 0)}`;
-  const fu = m.fleet_utilization;
-  if (fu?.optimized != null && fu?.baseline != null) {
-    const dpp = (fu.optimized - fu.baseline) * 100;
-    vhNote += ` · util ${fmt(fu.optimized * 100, 0)}% (${dpp >= 0 ? "+" : ""}${fmt(dpp, 1)}pp)`;
-  }
-  $("m-vh-d").textContent = vhNote;
-  $("m-vh-d").className = `metric__delta ${vhGood ? "good" : "bad"}`;
+  $("kpi-vh").textContent = fmt(s.vehicle_hours, 0);
+  const vhGood = s.vh_delta <= 0;
+  $("kpi-vh-d").textContent = `${vhGood ? "▼" : "▲"} ${fmt(Math.abs(s.vh_delta), 0)} vs GTFS`;
+  $("kpi-vh-d").className = `kpi-card__delta ${vhGood ? "good" : "bad"}`;
 
-  const risk = m.overcrowding;
-  $("m-risk").textContent = `${fmt(risk.optimized, 0)}%`;
-  const riskGood = risk.delta_pp > 0;
-  $("m-risk-d").textContent = `${riskGood ? "▼" : "▲"} ${fmt(Math.abs(risk.delta_pp), 0)} pp vs GTFS`;
-  $("m-risk-d").className = `metric__delta ${riskGood ? "good" : "bad"}`;
+  $("kpi-risk").textContent = fmt(s.overcrowding_pct, 0);
+  const riskGood = s.overcrowding_delta_pp > 0;
+  $("kpi-risk-d").textContent = `${riskGood ? "▼" : "▲"} ${fmt(Math.abs(s.overcrowding_delta_pp), 0)} pp vs GTFS`;
+  $("kpi-risk-d").className = `kpi-card__delta ${riskGood ? "good" : "bad"}`;
 }
 
 function renderChart(chartData) {
-  $("chart-wrap").hidden = false;
   const ctx = $("main-chart").getContext("2d");
   if (chart) chart.destroy();
   chart = new Chart(ctx, {
@@ -181,35 +285,32 @@ function renderChart(chartData) {
       labels: chartData.hours,
       datasets: [
         {
-          label: "Demand GTFS",
-          data: chartData.baseline_demand,
-          backgroundColor: "rgba(139, 155, 180, 0.35)",
+          label: "Trips GTFS",
+          data: chartData.trips_gtfs,
+          backgroundColor: "rgba(148, 163, 184, 0.55)",
+          borderRadius: 4,
           yAxisID: "y",
           order: 2,
         },
         {
-          label: "Demand AI",
-          data: chartData.predicted_demand,
-          backgroundColor: "rgba(61, 214, 198, 0.45)",
+          label: "Trips AI",
+          data: chartData.trips_ai,
+          backgroundColor: "rgba(37, 99, 235, 0.7)",
+          borderRadius: 4,
           yAxisID: "y",
           order: 1,
         },
         {
-          label: "Headway GTFS",
-          data: chartData.baseline_headway,
+          label: "Headway AI (phút)",
+          data: chartData.headway_ai,
           type: "line",
-          borderColor: "#8b9bb4",
-          borderDash: [4, 4],
-          pointRadius: 0,
+          borderColor: "#059669",
+          borderWidth: 2,
+          backgroundColor: "transparent",
+          pointRadius: 3,
+          pointHoverRadius: 5,
           yAxisID: "y1",
-        },
-        {
-          label: "Headway AI",
-          data: chartData.opt_headway,
-          type: "line",
-          borderColor: "#3dd6c6",
-          pointRadius: 0,
-          yAxisID: "y1",
+          order: 0,
         },
       ],
     },
@@ -217,22 +318,26 @@ function renderChart(chartData) {
       responsive: true,
       interaction: { mode: "index", intersect: false },
       plugins: {
-        legend: { labels: { color: "#8b9bb4", boxWidth: 12 } },
+        legend: {
+          labels: { boxWidth: 12, font: { size: 12 }, padding: 16 },
+        },
       },
       scales: {
-        x: { ticks: { color: "#8b9bb4" }, grid: { color: "rgba(255,255,255,0.05)" } },
+        x: {
+          title: { display: true, text: "Giờ", font: { size: 12 } },
+          grid: { display: false },
+        },
         y: {
           position: "left",
-          title: { display: true, text: "Hành khách/giờ", color: "#8b9bb4" },
-          ticks: { color: "#8b9bb4" },
-          grid: { color: "rgba(255,255,255,0.05)" },
+          title: { display: true, text: "Số chuyến/giờ", font: { size: 12 } },
+          beginAtZero: true,
+          grid: { color: "rgba(0,0,0,0.04)" },
         },
         y1: {
           position: "right",
-          reverse: true,
-          title: { display: true, text: "Headway (phút)", color: "#8b9bb4" },
-          ticks: { color: "#8b9bb4" },
+          title: { display: true, text: "Headway (phút)", font: { size: 12 } },
           grid: { drawOnChartArea: false },
+          reverse: true,
         },
       },
     },
@@ -240,43 +345,30 @@ function renderChart(chartData) {
 }
 
 function renderTable(rows) {
-  $("table-wrap").hidden = false;
-  const tbody = $("schedule-table").querySelector("tbody");
+  const tbody = $("hour-table").querySelector("tbody");
   tbody.innerHTML = "";
   for (const r of rows) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${r.hour}</td>
-      <td>${fmt(r.baseline_demand, 0)}</td>
-      <td>${fmt(r.predicted_demand, 0)}</td>
-      <td>${fmt(r.baseline_trips, 0)}</td>
-      <td>${fmt(r.opt_trips, 0)}</td>
-      <td>${fmt(r.baseline_headway_min, 1)}</td>
-      <td>${fmt(r.opt_headway_min, 1)}</td>`;
+      <td>${fmt(r.trips_gtfs, 0)}</td>
+      <td>${fmt(r.trips_ai, 0)}</td>
+      <td>${fmt(r.headway_ai, 1)}</td>`;
     tbody.appendChild(tr);
   }
 }
 
-function downloadCsv() {
-  if (!lastCsvRows?.length) return;
-  const cols = Object.keys(lastCsvRows[0]);
-  const lines = [cols.join(",")];
-  for (const row of lastCsvRows) {
-    lines.push(cols.map((c) => JSON.stringify(row[c] ?? "")).join(","));
-  }
-  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `mta_${lastCsvRows[0].route || "export"}.csv`;
-  a.click();
-  URL.revokeObjectURL(a.href);
+function showError(msg) {
+  $("error-state").textContent = msg;
+  $("error-state").hidden = false;
 }
 
 async function init() {
   try {
-    meta = await api("/api/optimizer/meta");
+    meta = await api("/api/v1/meta");
   } catch (err) {
-    setStatus(`Không tải được model: ${err.message}`, "error");
+    showError(`Không tải được cấu hình: ${err.message}`);
+    $("model-meta").textContent = "";
     return;
   }
 
@@ -289,58 +381,56 @@ async function init() {
   fillSelect($("season"), meta.seasons);
   fillSelect($("weather-group"), meta.weather_groups);
 
-  const hol = $("holiday-name");
-  for (const name of meta.holiday_names || []) {
-    const opt = document.createElement("option");
-    opt.value = name;
-    opt.textContent = name;
-    hol.appendChild(opt);
-  }
-
   const bounds = meta.date_bounds;
   const dateInput = $("selected-date");
   dateInput.min = bounds.min_date;
   dateInput.max = bounds.picker_max_date;
-  dateInput.value = "2024-06-03";
+  dateInput.value = bounds.max_date || bounds.min_date;
 
   renderPresets();
 
-  $("input-mode").addEventListener("change", toggleInputMode);
-  $("route-id").addEventListener("change", updateTradeoffHint);
-  $("filter-holiday").addEventListener("change", () => {
-    $("holiday-wrap").hidden = !$("filter-holiday").checked;
+  document.querySelectorAll(".mode-tab").forEach((tab) => {
+    tab.addEventListener("click", () => setMode(tab.dataset.mode));
   });
-  $("csv-btn").addEventListener("click", downloadCsv);
+
+  $("overrides-toggle").addEventListener("click", () => {
+    overridesOpen = !overridesOpen;
+    $("overrides-body").hidden = !overridesOpen;
+    $("overrides-toggle").setAttribute("aria-expanded", String(overridesOpen));
+  });
+
+  dateInput.addEventListener("change", () => {
+    if (mode === "date") fetchDateProfile(dateInput.value);
+  });
 
   $("opt-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const btn = $("run-btn");
     btn.disabled = true;
-    setStatus("Đang dự báo demand & tối ưu…", "loading");
-    $("metrics").hidden = true;
-    $("chart-wrap").hidden = true;
-    $("table-wrap").hidden = true;
-    $("alerts").innerHTML = "";
+    btn.textContent = "Đang tối ưu…";
+    $("error-state").hidden = true;
 
     try {
-      const data = await api("/api/optimizer/run", {
+      const data = await api("/api/v1/optimize", {
         method: "POST",
         body: JSON.stringify(buildPayload()),
       });
-      setStatus(`λ = ${fmt(data.lambda_cost, 0)} · ${data.source_label}`, "idle");
-      renderAlerts(data);
-      renderMetrics(data.metrics);
+      $("results").hidden = false;
+      $("empty-state").hidden = true;
+      renderContext(data.context);
+      renderSummary(data.summary);
       renderChart(data.chart);
-      renderTable(data.schedule);
-      lastCsvRows = data.csv_detail;
+      renderTable(data.hours);
     } catch (err) {
-      setStatus(err.message, "error");
+      showError(err.message);
     } finally {
-      btn.disabled = false;
+      btn.textContent = "Tối ưu lịch trình";
+      updateRunButton();
     }
   });
 
-  toggleInputMode();
+  setMode("date");
+  fetchDateProfile(dateInput.value);
 }
 
 init();

@@ -41,7 +41,7 @@ from .ui_scenario import (
     build_scenario_hourly_factors,
     list_holiday_names,
 )
-from .ui_weather import PICKER_FUTURE_DAYS, build_hourly_factors
+from .ui_weather import PICKER_FUTURE_DAYS, build_hourly_factors, meteorological_season
 from .ui_weather_groups import (
     WEATHER_GROUP_KEYS,
     WEATHER_GROUP_VI,
@@ -161,6 +161,232 @@ def factors_date_bounds() -> dict[str, str]:
         "max_date": max_d.isoformat(),
         "picker_max_date": picker_max.isoformat(),
     }
+
+
+V1_PRESET_KEYS: tuple[str, ...] = ("wait", "balanced", "vh_save")
+
+
+def get_meta_v1() -> dict[str, Any]:
+    bundle = load_artifacts()
+    presets = []
+    for key in V1_PRESET_KEYS:
+        p = TRADEOFF_PRESETS[key]
+        presets.append(
+            {
+                "key": key,
+                "label": p["label_vi"],
+                "description": p["hint"],
+            }
+        )
+    return _jsonable(
+        {
+            "routes": bundle.routes,
+            "model_built_at": bundle.model_built_at,
+            "presets": presets,
+            "date_bounds": factors_date_bounds(),
+            "weekday_weekend": [
+                {"key": k, "label": WEEKDAY_WEEKEND_VI[k]} for k in WEEKDAY_WEEKEND_OPTIONS
+            ],
+            "seasons": [{"key": k, "label": SEASON_VI[k]} for k in SEASONS],
+            "weather_groups": [
+                {"key": k, "label": WEATHER_GROUP_VI[k]} for k in WEATHER_GROUP_KEYS
+            ],
+            "holiday_names": list_holiday_names(str(FACTORS_DAILY)),
+        }
+    )
+
+
+@dataclass
+class ScenarioV1:
+    weekday_weekend: str = "weekday"
+    season: str = "summer"
+    weather_group: str = "sunny"
+    filter_holiday: bool = False
+    holiday_name: str | None = None
+    filter_major_event: bool = False
+
+
+@dataclass
+class OptimizeV1Request:
+    route_id: str
+    preset: str = "balanced"
+    mode: Literal["date", "scenario"] = "date"
+    date: str | None = None
+    scenario: ScenarioV1 | None = None
+    use_overrides: bool = False
+    overrides: ScenarioV1 | None = None
+
+
+def _season_key(month: int) -> str:
+    s = meteorological_season(month)
+    return "fall" if s == "autumn" else s
+
+
+def infer_weather_group(hourly: pd.DataFrame, weather_groups: dict[str, Any]) -> str:
+    meta = weather_groups.get("meta") or weather_groups.get("_meta") or {}
+    heat_thr = float(meta.get("heat_temp_c", 30))
+    cold_thr = float(meta.get("cold_temp_c", 0))
+    rain_q75 = float(meta.get("rain_q75_mm", 5))
+
+    snow = int(pd.to_numeric(hourly.get("is_snow", 0), errors="coerce").fillna(0).max())
+    severe = int(pd.to_numeric(hourly.get("is_severe_wind", 0), errors="coerce").fillna(0).max())
+    rain = pd.to_numeric(hourly.get("rain_mm", 0), errors="coerce").fillna(0)
+    rain_max = float(rain.max())
+    rain_any = int(pd.to_numeric(hourly.get("is_rain", 0), errors="coerce").fillna(0).max())
+    temp = pd.to_numeric(hourly.get("temperature_c", 15), errors="coerce").fillna(15)
+    wind_max = float(pd.to_numeric(hourly.get("windspeed_kmh", 0), errors="coerce").fillna(0).max())
+
+    if snow:
+        return "snow"
+    if severe or (rain_any and wind_max >= 40):
+        return "severe_storm"
+    if rain_any and rain_max >= rain_q75:
+        return "heavy_rain"
+    if rain_any:
+        return "light_rain"
+    if float(temp.max()) >= heat_thr:
+        return "heat_wave"
+    if float(temp.min()) <= cold_thr:
+        return "cold_snap"
+    return "sunny"
+
+
+def get_date_profile(date_str: str) -> dict[str, Any]:
+    target = date.fromisoformat(date_str)
+    hourly, source = build_hourly_factors(
+        target,
+        factors_hourly_path=str(FACTORS_HOURLY),
+        factors_daily_path=str(FACTORS_DAILY),
+    )
+    bundle = load_artifacts()
+    weather_group = infer_weather_group(hourly, bundle.weather_groups)
+
+    is_weekend = int(hourly["is_weekend"].iloc[0]) if "is_weekend" in hourly.columns else int(target.weekday() >= 5)
+    is_holiday = int(hourly["is_us_holiday"].iloc[0]) if "is_us_holiday" in hourly.columns else 0
+    weekday_weekend = "weekend" if is_weekend else "weekday"
+    season = _season_key(target.month)
+
+    temp = pd.to_numeric(hourly.get("temperature_c"), errors="coerce")
+    rain = pd.to_numeric(hourly.get("rain_mm", hourly.get("precipitation_mm", 0)), errors="coerce").fillna(0)
+    wind = pd.to_numeric(hourly.get("windspeed_kmh", 0), errors="coerce").fillna(0)
+
+    dow_vi = ["Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy", "Chủ Nhật"]
+    title = f"{dow_vi[target.weekday()]}, {target.strftime('%d/%m/%Y')}"
+
+    chips = [
+        WEEKDAY_WEEKEND_VI[weekday_weekend],
+        SEASON_VI[season],
+        WEATHER_GROUP_VI[weather_group],
+    ]
+    if is_holiday:
+        chips.append("Ngày lễ")
+
+    return _jsonable(
+        {
+            "date": target.isoformat(),
+            "source": source,
+            "title": title,
+            "chips": chips,
+            "inferred": {
+                "weekday_weekend": weekday_weekend,
+                "season": season,
+                "weather_group": weather_group,
+                "is_holiday": bool(is_holiday),
+                "filter_major_event": False,
+            },
+            "labels": {
+                "weekday_weekend": WEEKDAY_WEEKEND_VI[weekday_weekend],
+                "season": SEASON_VI[season],
+                "weather_group": WEATHER_GROUP_VI[weather_group],
+            },
+            "weather": {
+                "temp_min_c": float(temp.min()) if not temp.empty else None,
+                "temp_max_c": float(temp.max()) if not temp.empty else None,
+                "rain_total_mm": float(rain.sum()),
+                "wind_max_kmh": float(wind.max()) if not wind.empty else None,
+            },
+        }
+    )
+
+
+def run_optimization_v1(req: OptimizeV1Request) -> dict[str, Any]:
+    preset = req.preset if req.preset in TRADEOFF_PRESETS else "balanced"
+
+    if req.mode == "date":
+        if not req.date:
+            raise ValueError("date required for date mode")
+        ov = req.overrides if req.use_overrides and req.overrides else None
+        inner = OptimizeRequest(
+            route_id=req.route_id,
+            tradeoff_preset=preset,
+            input_mode="date",
+            selected_date=req.date,
+            weather_group=ov.weather_group if ov else "sunny",
+            filter_major_event=bool(ov.filter_major_event) if ov else False,
+            use_route_fleet=True,
+        )
+    else:
+        sc = req.scenario or ScenarioV1()
+        inner = OptimizeRequest(
+            route_id=req.route_id,
+            tradeoff_preset=preset,
+            input_mode="scenario",
+            weekday_weekend=sc.weekday_weekend,
+            season=sc.season,
+            weather_group=sc.weather_group,
+            filter_holiday=sc.filter_holiday,
+            holiday_name=sc.holiday_name if sc.filter_holiday else None,
+            filter_major_event=sc.filter_major_event,
+            use_route_fleet=True,
+        )
+
+    raw = run_optimization(inner)
+    badges = raw.get("context_badges") or []
+    title = " · ".join(badges[:2]) if badges else str(raw.get("source_label", ""))
+    subtitle = badges[2] if len(badges) > 2 else raw.get("source_label", "")
+
+    m = raw["metrics"]
+    wait = m["wait"]
+    vh = m["vehicle_hours"]
+    risk = m["overcrowding"]
+    schedule = raw.get("schedule") or []
+
+    return _jsonable(
+        {
+            "route_id": raw["route_id"],
+            "preset": raw["tradeoff_preset"],
+            "context": {
+                "title": title,
+                "subtitle": subtitle,
+                "warning": raw.get("scenario_warning"),
+            },
+            "summary": {
+                "wait_min": float(wait["optimized"]),
+                "wait_delta": float(wait["delta"]),
+                "vehicle_hours": float(vh["optimized"]),
+                "vh_delta": float(vh["delta"]),
+                "overcrowding_pct": float(risk["optimized"]),
+                "overcrowding_delta_pp": float(risk["delta_pp"]),
+            },
+            "chart": {
+                "hours": [int(r["hour"]) for r in schedule],
+                "trips_gtfs": [r["baseline_trips"] for r in schedule],
+                "trips_ai": [r["opt_trips"] for r in schedule],
+                "headway_gtfs": [r["baseline_headway_min"] for r in schedule],
+                "headway_ai": [r["opt_headway_min"] for r in schedule],
+            },
+            "hours": [
+                {
+                    "hour": int(r["hour"]),
+                    "trips_gtfs": r["baseline_trips"],
+                    "trips_ai": r["opt_trips"],
+                    "headway_gtfs": r["baseline_headway_min"],
+                    "headway_ai": r["opt_headway_min"],
+                }
+                for r in schedule
+            ],
+        }
+    )
 
 
 def get_meta() -> dict[str, Any]:
@@ -288,6 +514,9 @@ def run_optimization(req: OptimizeRequest) -> dict[str, Any]:
         )
         hourly_factors = prepared.hourly_factors
         factor_clip_note = prepared.clip_note
+        if req.filter_major_event:
+            hourly_factors = hourly_factors.copy()
+            hourly_factors.loc[hourly_factors["hour"].between(16, 22), "is_major_event_window"] = 1
         if req.weather_group != "sunny":
             hourly_factors = apply_weather_group_to_hourly(
                 hourly_factors, req.weather_group, bundle.weather_groups

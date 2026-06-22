@@ -6,140 +6,158 @@
   <title>MTA Optimizer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/optimizer/static/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
   <script src="/optimizer/static/app.js" type="module" defer></script>
 </head>
 <body>
-  <header class="topbar">
-    <div class="topbar__brand">
-      <a href="/" class="topbar__back">← Landing</a>
-      <h1>MTA Schedule Optimizer</h1>
+  <header class="header">
+    <div class="header__inner">
+      <a href="/" class="header__back">← Trang chủ</a>
+      <div>
+        <h1 class="header__title">MTA Schedule Optimizer</h1>
+        <p class="header__meta" id="model-meta">Đang tải…</p>
+      </div>
     </div>
-    <p class="topbar__meta" id="model-meta">Đang tải…</p>
   </header>
 
-  <main class="layout">
-    <aside class="panel panel--controls">
-      <form id="opt-form" class="form">
-        <label class="field">
-          <span>Tuyến</span>
-          <select id="route-id" name="route_id" required></select>
-        </label>
+  <main class="page">
+    <section class="panel panel--form">
+      <form id="opt-form">
+        <div class="form-grid">
+          <label class="control">
+            <span class="control__label">Tuyến</span>
+            <select id="route-id" class="control__input" required></select>
+          </label>
 
-        <fieldset class="field">
-          <legend>Trade-off chờ vs vehicle-hours</legend>
-          <div id="tradeoff-presets" class="preset-grid"></div>
-          <p id="tradeoff-hint" class="hint"></p>
-        </fieldset>
+          <div class="control">
+            <span class="control__label">Nguồn demand</span>
+            <div class="mode-tabs" role="tablist">
+              <button type="button" class="mode-tab is-active" data-mode="date">Theo ngày</button>
+              <button type="button" class="mode-tab" data-mode="scenario">Kịch bản thủ công</button>
+            </div>
+          </div>
 
-        <label class="field">
-          <span>Nguồn demand</span>
-          <select id="input-mode" name="input_mode">
-            <option value="date">Theo ngày cụ thể</option>
-            <option value="scenario">Kịch bản tổng quát</option>
-          </select>
-        </label>
-
-        <div id="date-fields">
-          <label class="field">
-            <span>Ngày</span>
-            <input type="date" id="selected-date" name="selected_date" />
+          <label id="date-field" class="control">
+            <span class="control__label">Chọn ngày</span>
+            <input type="date" id="selected-date" class="control__input" />
           </label>
         </div>
 
-        <div id="scenario-fields" hidden>
-          <label class="field">
-            <span>Ngày thường / cuối tuần</span>
-            <select id="weekday-weekend" name="weekday_weekend"></select>
-          </label>
-          <label class="field">
-            <span>Mùa</span>
-            <select id="season" name="season"></select>
-          </label>
-          <label class="field field--row">
-            <input type="checkbox" id="filter-holiday" name="filter_holiday" />
-            <span>Lọc ngày lễ</span>
-          </label>
-          <label class="field" id="holiday-wrap" hidden>
-            <span>Ngày lễ</span>
-            <select id="holiday-name" name="holiday_name">
-              <option value="">Tất cả ngày lễ</option>
-            </select>
-          </label>
-          <label class="field field--row">
-            <input type="checkbox" id="filter-major" name="filter_major_event" />
-            <span>Sự kiện lớn</span>
-          </label>
+        <!-- Profile sau khi crawl -->
+        <div id="date-profile" class="profile" hidden>
+          <div class="profile__head">
+            <div>
+              <p class="profile__eyebrow">Kịch bản tự động</p>
+              <h2 class="profile__title" id="profile-title">—</h2>
+              <p class="profile__source" id="profile-source"></p>
+            </div>
+            <div class="profile__stats" id="profile-stats"></div>
+          </div>
+          <div class="chips" id="profile-chips"></div>
         </div>
 
-        <label class="field">
-          <span>Nhóm thời tiết</span>
-          <select id="weather-group" name="weather_group"></select>
-        </label>
+        <div id="profile-loading" class="profile profile--loading" hidden>
+          <div class="spinner"></div>
+          <p>Đang lấy dữ liệu thời tiết…</p>
+        </div>
 
-        <label class="field field--row">
-          <input type="checkbox" id="use-route-fleet" name="use_route_fleet" checked />
-          <span>Giới hạn fleet theo tuyến</span>
-        </label>
+        <!-- Tùy chỉnh (chỉ sau khi có profile hoặc tab kịch bản) -->
+        <div id="overrides-section" class="overrides" hidden>
+          <button type="button" class="overrides__toggle" id="overrides-toggle" aria-expanded="false">
+            <span>Tùy chỉnh kịch bản</span>
+            <span class="chevron">▼</span>
+          </button>
+          <div id="overrides-body" class="overrides__body" hidden>
+            <div class="form-grid form-grid--overrides">
+              <label class="control" id="ctrl-weekday">
+                <span class="control__label">Loại ngày</span>
+                <select id="weekday-weekend" class="control__input" disabled></select>
+              </label>
+              <label class="control" id="ctrl-season">
+                <span class="control__label">Mùa</span>
+                <select id="season" class="control__input" disabled></select>
+              </label>
+              <label class="control">
+                <span class="control__label">Thời tiết</span>
+                <select id="weather-group" class="control__input" disabled></select>
+              </label>
+              <label class="control control--check">
+                <input type="checkbox" id="filter-holiday" disabled />
+                <span>Lọc ngày lễ</span>
+              </label>
+              <label class="control control--check">
+                <input type="checkbox" id="filter-major" disabled />
+                <span>Sự kiện lớn (16h–22h)</span>
+              </label>
+            </div>
+            <p class="overrides__hint" id="overrides-hint"></p>
+          </div>
+        </div>
 
-        <button type="submit" class="btn btn--primary" id="run-btn">Chạy tối ưu</button>
+        <div class="form-footer">
+          <div class="control">
+            <span class="control__label">Trade-off</span>
+            <div id="preset-btns" class="preset-row"></div>
+          </div>
+          <button type="submit" class="btn-primary" id="run-btn" disabled>Tối ưu lịch trình</button>
+        </div>
       </form>
-    </aside>
+    </section>
 
-    <section class="panel panel--results">
-      <div id="status" class="status status--idle">
-        Chọn tham số và bấm <strong>Chạy tối ưu</strong>.
+    <section id="results" class="results" hidden>
+      <div class="result-header">
+        <h2 class="result-header__title" id="ctx-title"></h2>
+        <p class="result-header__sub" id="ctx-sub"></p>
+        <p class="result-header__warn" id="ctx-warn" hidden></p>
       </div>
 
-      <div id="alerts"></div>
-
-      <div id="metrics" class="metrics" hidden>
-        <article class="metric">
-          <h3>Chờ TB (phút)</h3>
-          <p class="metric__value" id="m-wait">—</p>
-          <p class="metric__delta" id="m-wait-d">—</p>
+      <div class="kpi-grid">
+        <article class="kpi-card">
+          <span class="kpi-card__label">Chờ TB</span>
+          <span class="kpi-card__value" id="kpi-wait">—</span>
+          <span class="kpi-card__unit">phút</span>
+          <span class="kpi-card__delta" id="kpi-wait-d">—</span>
         </article>
-        <article class="metric">
-          <h3>Vehicle-hours</h3>
-          <p class="metric__value" id="m-vh">—</p>
-          <p class="metric__delta" id="m-vh-d">—</p>
+        <article class="kpi-card">
+          <span class="kpi-card__label">Vehicle-hours</span>
+          <span class="kpi-card__value" id="kpi-vh">—</span>
+          <span class="kpi-card__unit">giờ</span>
+          <span class="kpi-card__delta" id="kpi-vh-d">—</span>
         </article>
-        <article class="metric">
-          <h3>Quá tải (cao điểm)</h3>
-          <p class="metric__value" id="m-risk">—</p>
-          <p class="metric__delta" id="m-risk-d">—</p>
+        <article class="kpi-card">
+          <span class="kpi-card__label">Quá tải cao điểm</span>
+          <span class="kpi-card__value" id="kpi-risk">—</span>
+          <span class="kpi-card__unit">%</span>
+          <span class="kpi-card__delta" id="kpi-risk-d">—</span>
         </article>
       </div>
 
-      <div class="chart-wrap" id="chart-wrap" hidden>
-        <canvas id="main-chart" height="120"></canvas>
+      <div class="panel panel--chart">
+        <canvas id="main-chart" height="110"></canvas>
       </div>
 
-      <div class="table-wrap" id="table-wrap" hidden>
-        <div class="table-toolbar">
-          <h2>Lịch theo giờ</h2>
-          <button type="button" class="btn btn--ghost" id="csv-btn">Tải CSV</button>
-        </div>
-        <div class="table-scroll">
-          <table id="schedule-table">
-            <thead>
-              <tr>
-                <th>Giờ</th>
-                <th>Demand GTFS</th>
-                <th>Demand AI</th>
-                <th>Trips GTFS</th>
-                <th>Trips AI</th>
-                <th>Headway GTFS</th>
-                <th>Headway AI</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
+      <div class="panel panel--table">
+        <table id="hour-table">
+          <thead>
+            <tr>
+              <th>Giờ</th>
+              <th>Trips GTFS</th>
+              <th>Trips AI</th>
+              <th>Headway AI</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
       </div>
     </section>
+
+    <div id="empty-state" class="empty-state">
+      <div class="empty-state__icon">📅</div>
+      <p>Chọn ngày để tự động lấy thời tiết và xem kịch bản</p>
+    </div>
+    <p id="error-state" class="error-banner" hidden></p>
   </main>
 </body>
 </html>

@@ -6,7 +6,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
@@ -21,11 +21,11 @@ sys.path.insert(0, str(NOTEBOOKS))
 
 from lib.ui_constraints import ValidationError  # noqa: E402
 from lib.ui_service import (  # noqa: E402
-    OptimizeRequest,
-    get_meta,
-    get_tradeoff,
-    load_artifacts,
-    run_optimization,
+    OptimizeV1Request,
+    ScenarioV1,
+    get_date_profile,
+    get_meta_v1,
+    run_optimization_v1,
 )
 from lib.ui_station_schedule import schedule_by_station  # noqa: E402
 
@@ -35,7 +35,7 @@ RIDERSHIP = ROOT / "datasets" / "ridership.csv"
 OPTIMIZER_UI = ROOT / "optimizer-ui"
 LANDING_DIST = ROOT / "landingpage3d" / "dist"
 
-app = FastAPI(title="MTA Schedule API", version="2.0")
+app = FastAPI(title="MTA Schedule API", version="3.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -45,21 +45,23 @@ app.add_middleware(
 )
 
 
-class OptimizeBody(BaseModel):
-    route_id: str
-    tradeoff_preset: str = "balanced"
-    lambda_cost: float | None = None
-    input_mode: str = "date"
-    selected_date: str | None = None
+class ScenarioBody(BaseModel):
     weekday_weekend: str = "weekday"
     season: str = "summer"
     weather_group: str = "sunny"
     filter_holiday: bool = False
     holiday_name: str | None = None
     filter_major_event: bool = False
-    use_route_fleet: bool = True
-    manual_weather: dict[str, float | int] | None = None
-    constraints: dict[str, Any] | None = None
+
+
+class OptimizeV1Body(BaseModel):
+    route_id: str
+    preset: str = "balanced"
+    mode: Literal["date", "scenario"] = "date"
+    date: str | None = None
+    scenario: ScenarioBody | None = None
+    use_overrides: bool = False
+    overrides: ScenarioBody | None = None
 
 
 def _load_schedule_json(scenario: str) -> pd.DataFrame:
@@ -100,49 +102,68 @@ def get_schedule_by_station(
     )
 
 
-@app.get("/api/optimizer/meta")
-def optimizer_meta() -> dict[str, Any]:
+@app.get("/api/v1/meta")
+def optimizer_meta_v1() -> dict[str, Any]:
     try:
-        return get_meta()
+        return get_meta_v1()
     except FileNotFoundError as exc:
         raise HTTPException(503, str(exc)) from exc
     except Exception as exc:
         raise HTTPException(500, str(exc)) from exc
 
 
-@app.get("/api/optimizer/tradeoff")
-def optimizer_tradeoff(
-    route_id: str = Query(...),
-    preset: str = Query("balanced"),
+@app.get("/api/v1/date-profile")
+def optimizer_date_profile(
+    date: str = Query(..., description="ISO date YYYY-MM-DD"),
 ) -> dict[str, Any]:
     try:
-        return get_tradeoff(route_id, preset)
+        return get_date_profile(date)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
 
 
-@app.post("/api/optimizer/run")
-def optimizer_run(body: OptimizeBody) -> dict[str, Any]:
-    if body.input_mode not in ("date", "scenario"):
-        raise HTTPException(400, "input_mode must be date or scenario")
-    req = OptimizeRequest(
+@app.post("/api/v1/optimize")
+def optimizer_run_v1(body: OptimizeV1Body) -> dict[str, Any]:
+    if body.mode == "date" and not body.date:
+        raise HTTPException(400, "date required when mode is date")
+    if body.mode == "scenario" and body.scenario is None:
+        body = body.model_copy(update={"scenario": ScenarioBody()})
+
+    sc = body.scenario
+    ov = body.overrides
+    req = OptimizeV1Request(
         route_id=body.route_id,
-        tradeoff_preset=body.tradeoff_preset,
-        lambda_cost=body.lambda_cost,
-        input_mode=body.input_mode,  # type: ignore[arg-type]
-        selected_date=body.selected_date,
-        weekday_weekend=body.weekday_weekend,
-        season=body.season,
-        weather_group=body.weather_group,
-        filter_holiday=body.filter_holiday,
-        holiday_name=body.holiday_name,
-        filter_major_event=body.filter_major_event,
-        use_route_fleet=body.use_route_fleet,
-        manual_weather=body.manual_weather,
-        constraints=body.constraints,
+        preset=body.preset,
+        mode=body.mode,
+        date=body.date,
+        use_overrides=body.use_overrides,
+        overrides=ScenarioV1(
+            weekday_weekend=ov.weekday_weekend,
+            season=ov.season,
+            weather_group=ov.weather_group,
+            filter_holiday=ov.filter_holiday,
+            holiday_name=ov.holiday_name,
+            filter_major_event=ov.filter_major_event,
+        )
+        if ov
+        else None,
+        scenario=ScenarioV1(
+            weekday_weekend=sc.weekday_weekend,
+            season=sc.season,
+            weather_group=sc.weather_group,
+            filter_holiday=sc.filter_holiday,
+            holiday_name=sc.holiday_name,
+            filter_major_event=sc.filter_major_event,
+        )
+        if sc
+        else None,
     )
     try:
-        return run_optimization(req)
+        return run_optimization_v1(req)
     except ValidationError as exc:
         raise HTTPException(422, str(exc)) from exc
     except ValueError as exc:
@@ -153,21 +174,12 @@ def optimizer_run(body: OptimizeBody) -> dict[str, Any]:
         raise HTTPException(500, str(exc)) from exc
 
 
-@app.post("/api/optimizer/reload")
-def optimizer_reload() -> dict[str, str]:
-    try:
-        load_artifacts(reload=True)
-        return {"status": "reloaded"}
-    except Exception as exc:
-        raise HTTPException(500, str(exc)) from exc
-
-
 @app.get("/optimizer")
 @app.get("/optimizer/")
 def optimizer_page() -> FileResponse:
     index = OPTIMIZER_UI / "index.html"
     if not index.exists():
-        raise HTTPException(404, "optimizer-ui not found — build or copy optimizer-ui/")
+        raise HTTPException(404, "optimizer-ui not found")
     return FileResponse(index)
 
 
