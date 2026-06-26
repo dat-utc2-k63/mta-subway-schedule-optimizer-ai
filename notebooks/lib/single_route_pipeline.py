@@ -17,6 +17,47 @@ DEFAULT_LAG_COLS = ["log_lag_24h", "log_lag_168h", "log_rolling_7d"]
 SEASON_ORDER = ("winter", "spring", "summer", "autumn")
 
 
+def configure_gpu(*, mixed_precision: bool = True, memory_growth: bool = True) -> dict[str, Any]:
+    """Tối ưu GPU cho Keras/TF (Kaggle): mixed-precision + memory growth. Gọi một lần ở đầu notebook."""
+    info: dict[str, Any] = {
+        "gpus": [],
+        "mixed_precision": False,
+        "memory_growth": False,
+        "policy": "float32",
+    }
+    try:
+        gpus = tf.config.list_physical_devices("GPU")
+    except Exception as exc:  # pragma: no cover
+        info["error"] = f"list_physical_devices: {exc}"
+        return info
+
+    info["gpus"] = [getattr(g, "name", str(g)) for g in gpus]
+    if not gpus:
+        return info
+
+    if memory_growth:
+        for g in gpus:
+            try:
+                tf.config.experimental.set_memory_growth(g, True)
+                info["memory_growth"] = True
+            except Exception:  # pragma: no cover
+                pass
+
+    try:
+        from tensorflow.keras import mixed_precision as _mp
+
+        if mixed_precision:
+            _mp.set_global_policy("mixed_float16")
+            info["mixed_precision"] = True
+            info["policy"] = "mixed_float16"
+        else:
+            _mp.set_global_policy("float32")
+            info["policy"] = "float32"
+    except Exception as exc:  # pragma: no cover
+        info["error"] = f"policy: {exc}"
+    return info
+
+
 def season_from_month(month: int) -> str:
     """Mùa khí tượng Bắc bán cầu (phù hợp NYC): Đông 12–2, Xuân 3–5, Hè 6–8, Thu 9–11."""
     m = int(month)
@@ -226,20 +267,70 @@ def tune_blend_weight_mae(
     return best_w, best_mae
 
 
-def hour_slot_group(hour: int) -> str:
-    """Nhóm giờ cho báo cáo bound: peak / overnight / off_peak."""
+def is_overnight_hour(hour: int) -> bool:
+    """Giờ đêm (23–06): ràng buộc TRIPS riêng, tách khỏi ban ngày."""
     h = int(hour)
-    if h in (7, 8, 9, 17, 18, 19):
-        return "peak"
-    if h <= 6 or h >= 23:
-        return "overnight"
-    return "off_peak"
+    return h <= 6 or h >= 23
+
+
+def hour_slot_group(hour: int) -> str:
+    """Nhóm giờ cho báo cáo bound: daytime / overnight."""
+    return "overnight" if is_overnight_hour(hour) else "daytime"
+
+
+def detect_demand_peaks(
+    demand: np.ndarray,
+    *,
+    slot_route: np.ndarray | None = None,
+    peak_percentile: float = 75.0,
+    overnight_percentile: float = 20.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Phát hiện cao điểm ĐỘNG theo nhu cầu (demand-driven), không dựa vào khung giờ tĩnh.
+
+    Quét mảng nhu cầu đã dịch pha (trục xuất bến):
+      - Peak: demand ≥ phân vị `peak_percentile` (tính riêng từng route nếu có slot_route).
+      - Overnight (cầu rất thấp): demand ≤ phân vị `overnight_percentile`.
+      - Còn lại: off-peak.
+
+    Trả về (is_peak, is_overnight) — mảng bool theo slot.
+    """
+    d = np.asarray(demand, dtype=float)
+    n = len(d)
+    is_peak = np.zeros(n, dtype=bool)
+    is_overnight = np.zeros(n, dtype=bool)
+    if n == 0:
+        return is_peak, is_overnight
+
+    def _flag(idx: np.ndarray) -> None:
+        vals = d[idx]
+        finite = vals[np.isfinite(vals)]
+        if finite.size == 0:
+            return
+        hi = float(np.percentile(finite, float(peak_percentile)))
+        lo = float(np.percentile(finite, float(overnight_percentile)))
+        is_peak[idx] = vals >= max(hi, 1e-9)
+        is_overnight[idx] = vals <= lo
+
+    if slot_route is None:
+        _flag(np.arange(n))
+    else:
+        routes = np.asarray(slot_route)
+        for r in np.unique(routes):
+            _flag(np.flatnonzero(routes == r))
+    # overnight và peak loại trừ nhau (peak ưu tiên)
+    is_overnight &= ~is_peak
+    return is_peak, is_overnight
 
 
 def build_dynamic_bounds(
     baseline_trips: np.ndarray,
     slot_hour: np.ndarray,
     *,
+    demand: np.ndarray | None = None,
+    slot_route: np.ndarray | None = None,
+    peak_percentile: float = 75.0,
+    overnight_percentile: float = 20.0,
+    daytime_factor: float | None = None,
     peak_factor: float = 1.40,
     offpeak_factor: float = 1.15,
     overnight_factor: float = 1.05,
@@ -248,15 +339,39 @@ def build_dynamic_bounds(
     max_delta: int = 3,
     absolute_max: int = 60,
     min_trips: int = 2,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Per-slot TRIPS_MIN / TRIPS_MAX theo nhóm giờ (peak / off-peak / overnight)."""
+    return_daytime_mask: bool = False,
+    return_peak_mask: bool = False,
+) -> tuple[np.ndarray, np.ndarray] | tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Per-slot TRIPS_MIN / TRIPS_MAX: một ràng buộc ban ngày + overnight riêng.
+
+    - Ban ngày (07–22): cùng `daytime_factor` cho mọi slot không thuộc đêm.
+    - Đêm (23–06): `overnight_factor` / `overnight_min_factor`.
+    - Nếu truyền `demand`: phát hiện overnight theo phân vị cầu (theo route).
+      Không còn tách peak/off-peak ban ngày.
+    - `peak_factor` / `offpeak_factor`: legacy — chỉ dùng khi `daytime_factor` là None
+      và hai factor khác nhau (notebook v1).
+    """
     base = np.asarray(baseline_trips, dtype=float)
     hrs = np.asarray(slot_hour, dtype=int)
-    is_peak = np.isin(hrs, (7, 8, 9, 17, 18, 19))
-    is_overnight = (hrs <= 6) | (hrs >= 23)
-    factors = np.full(len(base), float(offpeak_factor))
-    factors[is_peak] = float(peak_factor)
-    factors[is_overnight] = float(overnight_factor)
+
+    if demand is not None:
+        _, is_overnight = detect_demand_peaks(
+            demand,
+            slot_route=slot_route,
+            peak_percentile=peak_percentile,
+            overnight_percentile=overnight_percentile,
+        )
+    else:
+        is_overnight = np.array([is_overnight_hour(h) for h in hrs], dtype=bool)
+
+    is_daytime = ~is_overnight
+    if daytime_factor is not None:
+        factors = np.where(is_overnight, float(overnight_factor), float(daytime_factor))
+    else:
+        is_peak = np.isin(hrs, (7, 8, 9, 17, 18, 19)) & is_daytime
+        factors = np.full(len(base), float(offpeak_factor))
+        factors[is_peak] = float(peak_factor)
+        factors[is_overnight] = float(overnight_factor)
 
     ovn_min = float(overnight_min_factor if overnight_min_factor is not None else min_factor)
     min_factors = np.full(len(base), float(min_factor))
@@ -266,6 +381,8 @@ def build_dynamic_bounds(
     trips_min = np.maximum(min_trips_arr, np.floor(base * min_factors)).astype(int)
     trips_max = np.minimum(absolute_max, np.floor(base * factors)).astype(int)
     trips_max = np.maximum(trips_max, base.astype(int) + int(max_delta))
+    if return_daytime_mask or return_peak_mask:
+        return trips_min, trips_max, is_daytime
     return trips_min, trips_max
 
 
@@ -276,11 +393,14 @@ def report_bound_status(
     slot_hour: np.ndarray,
     *,
     target_interior_pct: float = 60.0,
-    target_peak_interior_pct: float = 40.0,
+    target_daytime_interior_pct: float = 40.0,
+    target_peak_interior_pct: float | None = None,
     verbose: bool = True,
     label: str = "",
 ) -> dict[str, Any]:
     """% slot ở min / max / interior — tổng và theo nhóm giờ; kiểm tra target."""
+    if target_peak_interior_pct is not None:
+        target_daytime_interior_pct = float(target_peak_interior_pct)
     t = np.asarray(opt_trips, dtype=int)
     tmin = np.asarray(trips_min, dtype=int)
     tmax = np.asarray(trips_max, dtype=int)
@@ -289,12 +409,14 @@ def report_bound_status(
     interior = 100.0 - at_min - at_max
 
     by_group = bound_status_by_hour_groups(t, tmin, tmax, slot_hour)
-    peak_interior = float("nan")
-    if not by_group.empty and (by_group["hour_group"] == "peak").any():
-        peak_interior = float(by_group.loc[by_group["hour_group"] == "peak", "interior_pct"].iloc[0])
+    daytime_interior = float("nan")
+    if not by_group.empty and (by_group["hour_group"] == "daytime").any():
+        daytime_interior = float(
+            by_group.loc[by_group["hour_group"] == "daytime", "interior_pct"].iloc[0]
+        )
 
     ok_total = interior >= target_interior_pct
-    ok_peak = np.isnan(peak_interior) or peak_interior >= target_peak_interior_pct
+    ok_daytime = np.isnan(daytime_interior) or daytime_interior >= target_daytime_interior_pct
 
     if verbose:
         prefix = f"[{label}] " if label else ""
@@ -305,8 +427,8 @@ def report_bound_status(
         )
         for _, row in by_group.iterrows():
             mark = ""
-            if row["hour_group"] == "peak":
-                mark = " ✓" if row["interior_pct"] >= target_peak_interior_pct else " ✗"
+            if row["hour_group"] == "daytime":
+                mark = " ✓" if row["interior_pct"] >= target_daytime_interior_pct else " ✗"
             print(
                 f"    {row['hour_group']:10s} n={int(row['n_slots']):4d} | "
                 f"min={row['at_min_pct']:.0f}% max={row['at_max_pct']:.0f}% "
@@ -317,9 +439,11 @@ def report_bound_status(
         "at_min_pct": at_min,
         "at_max_pct": at_max,
         "interior_pct": interior,
-        "peak_interior_pct": peak_interior,
+        "daytime_interior_pct": daytime_interior,
+        "peak_interior_pct": daytime_interior,  # legacy alias
         "ok_total_interior": ok_total,
-        "ok_peak_interior": ok_peak,
+        "ok_daytime_interior": ok_daytime,
+        "ok_peak_interior": ok_daytime,  # legacy alias
         "by_hour_group": by_group,
     }
 
@@ -361,14 +485,14 @@ def bound_status_by_hour_groups(
     trips_max: np.ndarray,
     hours: np.ndarray,
 ) -> pd.DataFrame:
-    """% slot ở min / max / interior theo nhóm giờ (peak, overnight, off_peak)."""
+    """% slot ở min / max / interior theo nhóm giờ (daytime, overnight)."""
     t = np.asarray(trips, dtype=int)
     tmin = np.asarray(trips_min, dtype=int)
     tmax = np.asarray(trips_max, dtype=int)
     hrs = np.asarray(hours, dtype=int)
     groups = np.array([hour_slot_group(h) for h in hrs])
     rows = []
-    for g in ("peak", "overnight", "off_peak"):
+    for g in ("daytime", "overnight"):
         m = groups == g
         if not m.any():
             continue
@@ -390,206 +514,8 @@ def bound_status_by_hour_groups(
     return pd.DataFrame(rows)
 
 
-def build_transfer_matrix(
-    routes_by_station_df: pd.DataFrame,
-    route_list: list[str],
-    *,
-    route_col: str | None = None,
-    route_aliases: dict[str, str] | None = None,
-    min_weight: float = 0.1,
-) -> pd.DataFrame:
-    """Deprecated — spillover removed per upgrade_model.md (Future Work only)."""
-    raw = routes_by_station_df.copy()
-    col = route_col
-    if col is None:
-        col = "gtfs_route_ids" if "gtfs_route_ids" in raw.columns else "route_ids_gtfs"
-    aliases = route_aliases or {}
-
-    station_routes = (
-        raw.assign(route=raw[col].astype(str).str.split())
-        .explode("route")
-        .dropna(subset=["route"])
-    )
-    station_routes = station_routes[station_routes["route"] != ""]
-    station_routes = station_routes[["station_complex_id", "route"]].drop_duplicates()
-    station_routes["route"] = station_routes["route"].replace(aliases)
-
-    routes = [str(r).strip() for r in route_list]
-    routes = sorted(set(routes))
-    route_station_sets: dict[str, set] = {r: set() for r in routes}
-    for _, row in station_routes.iterrows():
-        r = str(row["route"]).strip()
-        if r in route_station_sets:
-            route_station_sets[r].add(str(row["station_complex_id"]))
-
-    n_stations = {r: max(len(route_station_sets[r]), 1) for r in routes}
-    mat = pd.DataFrame(0.0, index=routes, columns=routes)
-    for r1 in routes:
-        s1 = route_station_sets[r1]
-        for r2 in routes:
-            shared = len(s1 & route_station_sets[r2])
-            if shared <= 0:
-                continue
-            mat.loc[r1, r2] = shared / np.sqrt(n_stations[r1] * n_stations[r2])
-
-    mat = mat.where(mat > float(min_weight), 0.0)
-    return mat
-
-
-def adjust_demand_with_spillover(
-    demand_dict: dict[str, np.ndarray],
-    transfer_matrix: pd.DataFrame,
-    alpha: float = 0.05,
-) -> dict[str, np.ndarray]:
-    """Demand spillover: d_r[h] += alpha × Σ w[r,r2] × d_r2[h] (r2 ≠ r, w>0)."""
-    a = float(alpha)
-    adjusted: dict[str, np.ndarray] = {}
-    for r, d in demand_dict.items():
-        rs = str(r).strip()
-        if rs not in transfer_matrix.index:
-            adjusted[rs] = np.asarray(d, dtype=float).copy()
-            continue
-        d_r = np.asarray(d, dtype=float)
-        spill = np.zeros_like(d_r, dtype=float)
-        for r2 in transfer_matrix.columns:
-            r2s = str(r2).strip()
-            if r2s == rs or r2s not in demand_dict:
-                continue
-            w = float(transfer_matrix.loc[rs, r2s])
-            if w <= 0.0:
-                continue
-            spill += w * np.asarray(demand_dict[r2s], dtype=float)
-        adjusted[rs] = d_r + a * spill
-    return adjusted
-
-
-def route_hour_df_to_demand_dict(
-    route_hour_df: pd.DataFrame,
-    route_list: list[str],
-    hours: list[int] | np.ndarray,
-    *,
-    demand_col: str = "demand",
-) -> dict[str, np.ndarray]:
-    """DataFrame (route_id, hour, demand) → {route: array(len(hours))}."""
-    rh = route_hour_df.set_index(["route_id", "hour"])[demand_col]
-    out: dict[str, np.ndarray] = {}
-    hrs = [int(h) for h in hours]
-    for r in route_list:
-        rs = str(r).strip()
-        out[rs] = np.array([float(rh.get((rs, h), 0.0)) for h in hrs], dtype=float)
-    return out
-
-
-def demand_dict_to_route_hour_df(
-    demand_dict: dict[str, np.ndarray],
-    hours: list[int] | np.ndarray,
-) -> pd.DataFrame:
-    """{route: demand[hours]} → long DataFrame route_id, hour, demand."""
-    hrs = [int(h) for h in hours]
-    rows = []
-    for r, d in demand_dict.items():
-        arr = np.asarray(d, dtype=float)
-        for i, h in enumerate(hrs):
-            rows.append(dict(route_id=str(r), hour=h, demand=float(arr[i])))
-    return pd.DataFrame(rows)
-
-
-def evaluate_spillover_forecast_mae(
-    actual_dict: dict[str, np.ndarray],
-    pred_dict: dict[str, np.ndarray],
-    transfer_matrix: pd.DataFrame,
-    alpha: float = 0.05,
-) -> dict[str, float]:
-    """MAE tổng trước/sau spillover adjustment trên demand_dict cùng format."""
-    pred_adj = adjust_demand_with_spillover(pred_dict, transfer_matrix, alpha=alpha)
-    abs_err_before: list[float] = []
-    abs_err_after: list[float] = []
-    for r, y_true in actual_dict.items():
-        rs = str(r).strip()
-        if rs not in pred_dict:
-            continue
-        yt = np.asarray(y_true, dtype=float)
-        yb = np.asarray(pred_dict[rs], dtype=float)
-        ya = np.asarray(pred_adj.get(rs, yb), dtype=float)
-        n = min(len(yt), len(yb), len(ya))
-        if n <= 0:
-            continue
-        abs_err_before.extend(np.abs(yt[:n] - yb[:n]))
-        abs_err_after.extend(np.abs(yt[:n] - ya[:n]))
-    mae_before = float(np.mean(abs_err_before)) if abs_err_before else float("nan")
-    mae_after = float(np.mean(abs_err_after)) if abs_err_after else float("nan")
-    return dict(
-        mae_before=mae_before,
-        mae_after=mae_after,
-        mae_delta=mae_before - mae_after,
-        alpha=float(alpha),
-    )
-
-
-def spillover_benefit_by_route(
-    actual_dict: dict[str, np.ndarray],
-    pred_dict: dict[str, np.ndarray],
-    transfer_matrix: pd.DataFrame,
-    alpha: float = 0.05,
-) -> pd.DataFrame:
-    """MAE trước/sau theo từng tuyến; benefit = mae_before − mae_after (dương = tốt hơn)."""
-    pred_adj = adjust_demand_with_spillover(pred_dict, transfer_matrix, alpha=alpha)
-    rows = []
-    for r, y_true in actual_dict.items():
-        rs = str(r).strip()
-        if rs not in pred_dict:
-            continue
-        yt = np.asarray(y_true, dtype=float)
-        yb = np.asarray(pred_dict[rs], dtype=float)
-        ya = np.asarray(pred_adj.get(rs, yb), dtype=float)
-        n = min(len(yt), len(yb), len(ya))
-        if n <= 0:
-            continue
-        mae_b = float(np.mean(np.abs(yt[:n] - yb[:n])))
-        mae_a = float(np.mean(np.abs(yt[:n] - ya[:n])))
-        rows.append(
-            dict(
-                route_id=rs,
-                mae_before=mae_b,
-                mae_after=mae_a,
-                benefit=mae_b - mae_a,
-                n_hours=n,
-            )
-        )
-    return pd.DataFrame(rows).sort_values("benefit", ascending=False).reset_index(drop=True)
-
-
-def plot_transfer_heatmap(
-    transfer_matrix: pd.DataFrame,
-    *,
-    top_n: int = 10,
-    ax: Any | None = None,
-    title: str = "Transfer matrix (top routes by connectivity)",
-    save_path: Path | str | None = None,
-) -> Any:
-    """Heatmap top-N tuyến có tổng transfer weight lớn nhất."""
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-
-    degree = transfer_matrix.sum(axis=1).sort_values(ascending=False)
-    top_routes = degree.head(int(top_n)).index.tolist()
-    sub = transfer_matrix.loc[top_routes, top_routes]
-    if ax is None:
-        _, ax = plt.subplots(figsize=(8, 6))
-    sns.heatmap(
-        sub,
-        annot=True,
-        fmt=".2f",
-        cmap="YlOrRd",
-        linewidths=0.4,
-        cbar_kws={"label": "transfer weight"},
-        ax=ax,
-    )
-    ax.set_title(title)
-    if save_path is not None:
-        ax.figure.tight_layout()
-        ax.figure.savefig(save_path, dpi=120, bbox_inches="tight")
-    return ax
+# NOTE: Cơ chế "demand spillover" / "transfer matrix" cũ (route-level) đã được loại bỏ
+# triệt để — kiến trúc mới dùng dự báo cấp ga + Departure-Time Projection thay thế.
 
 
 def cycle_times_to_map(
@@ -779,12 +705,12 @@ def wait_totals_by_hour_groups(
     slot_wait: np.ndarray,
     slot_hour: np.ndarray,
 ) -> pd.DataFrame:
-    """Tổng passenger-min wait theo nhóm giờ (peak / off_peak / overnight)."""
+    """Tổng passenger-min wait theo nhóm giờ (daytime / overnight)."""
     sw = np.asarray(slot_wait, dtype=float)
     hrs = np.asarray(slot_hour, dtype=int)
     groups = np.array([hour_slot_group(int(h)) for h in hrs])
     rows = []
-    for g in ("peak", "overnight", "off_peak"):
+    for g in ("daytime", "overnight"):
         m = groups == g
         if not m.any():
             continue
@@ -1276,7 +1202,12 @@ def aggregate_ridership_to_routes(
     *,
     coverage_thr: float = 0.7,
 ) -> pd.DataFrame:
-    """Phân bổ ridership ga → tuyến theo trọng số chuyến GTFS; scale coverage."""
+    """[DEPRECATED] Gộp ridership ga→tuyến (legacy route-level forecasting).
+
+    Kiến trúc mới dự báo trực tiếp ở cấp GA (station-level) rồi dùng
+    `project_station_demand_to_departures` để chiếu ngược về trục xuất bến.
+    Hàm này chỉ giữ lại cho EDA/đối chiếu, không còn nằm trên luồng chính.
+    """
     rs = ridership_station.copy()
     rs["station_complex_id"] = rs["station_complex_id"].astype(str)
     rs["hour"] = rs["hour"].astype(int)
@@ -1307,6 +1238,234 @@ def aggregate_ridership_to_routes(
 
     out = agg[["route", "date", "hour", "demand", "coverage"]].rename(columns={"route": "route_id"})
     out["date"] = pd.to_datetime(out["date"])
+    return out
+
+
+# =====================================================================================
+# STATION-LEVEL DEMAND FORECASTING + DEPARTURE-TIME PROJECTION (Không – Thời gian)
+# -------------------------------------------------------------------------------------
+# Luồng nhân quả vật lý:
+#   1) Dự báo lượng quẹt thẻ vào TỪNG GA theo giờ  D_station(s, h_board).
+#   2) Ma trận trọng số tần suất GTFS phân bổ cầu ga về cặp (Tuyến, Hướng):
+#         D_rd(r, dir, s, h) = D_station(s, h) · w_freq(s, r, dir, h)
+#   3) Chiếu ngược thời gian (khấu trừ T_travel từ bến đầu → ga s):
+#         t0 = t_board − T_travel(r, dir, s)  → dồn cầu về trục xuất bến.
+# =====================================================================================
+
+
+def _haversine_km(lat1: np.ndarray, lon1: np.ndarray, lat2: np.ndarray, lon2: np.ndarray) -> np.ndarray:
+    """Khoảng cách great-circle (km) — vector hoá NumPy."""
+    r = 6371.0088
+    p1 = np.radians(np.asarray(lat1, dtype=float))
+    p2 = np.radians(np.asarray(lat2, dtype=float))
+    dphi = p2 - p1
+    dlmb = np.radians(np.asarray(lon2, dtype=float) - np.asarray(lon1, dtype=float))
+    a = np.sin(dphi / 2.0) ** 2 + np.cos(p1) * np.cos(p2) * np.sin(dlmb / 2.0) ** 2
+    return 2.0 * r * np.arcsin(np.sqrt(np.clip(a, 0.0, 1.0)))
+
+
+def build_station_stop_map(
+    station_coords: pd.DataFrame,
+    stops: pd.DataFrame,
+    *,
+    station_id_col: str = "station_complex_id",
+    lat_col: str = "latitude",
+    lon_col: str = "longitude",
+    max_dist_km: float = 1.5,
+) -> pd.DataFrame:
+    """Ánh xạ station_complex_id → parent_stop_id GTFS gần nhất (nearest neighbour theo toạ độ).
+
+    Dữ liệu ridership không có stop_id GTFS; ta nối qua kinh/vĩ độ để lấy được
+    `parent_stop_id` (cùng convention với `load_gtfs_stop_offset_templates`) — phục vụ
+    tra cứu ma trận thời gian hành trình T_travel.
+
+    Trả về: station_complex_id, parent_stop_id, stop_name, dist_km.
+    """
+    sc = station_coords[[station_id_col, lat_col, lon_col]].dropna().copy()
+    sc[station_id_col] = sc[station_id_col].astype(str)
+    sc = sc.drop_duplicates(subset=[station_id_col])
+
+    st = stops.copy()
+    st["stop_lat"] = pd.to_numeric(st.get("stop_lat"), errors="coerce")
+    st["stop_lon"] = pd.to_numeric(st.get("stop_lon"), errors="coerce")
+    st = st.dropna(subset=["stop_lat", "stop_lon"])
+    parent = st.set_index("stop_id").get("parent_station")
+    parent_map = parent.to_dict() if parent is not None else {}
+    name_map = st.set_index("stop_id").get("stop_name", pd.Series(dtype=str)).to_dict()
+
+    stop_lat = st["stop_lat"].to_numpy()
+    stop_lon = st["stop_lon"].to_numpy()
+    stop_ids = st["stop_id"].astype(str).to_numpy()
+
+    rows: list[dict[str, Any]] = []
+    for _, s in sc.iterrows():
+        d = _haversine_km(float(s[lat_col]), float(s[lon_col]), stop_lat, stop_lon)
+        j = int(np.argmin(d))
+        dist = float(d[j])
+        if dist > float(max_dist_km):
+            continue
+        sid = stop_ids[j]
+        pst = parent_map.get(sid)
+        parent_stop_id = str(pst) if isinstance(pst, str) and pst and pst != "nan" else str(sid)
+        rows.append(
+            dict(
+                station_complex_id=str(s[station_id_col]),
+                parent_stop_id=parent_stop_id,
+                stop_name=str(name_map.get(sid, sid)),
+                dist_km=round(dist, 4),
+            )
+        )
+    return pd.DataFrame(rows)
+
+
+def build_station_route_direction_weights(
+    station_to_routes: pd.DataFrame,
+    headway: pd.DataFrame,
+    *,
+    min_trips: int = 1,
+    route_aliases: dict[str, str] | None = None,
+) -> pd.DataFrame:
+    """Ma trận trọng số tần suất: phân bổ cầu ga → cặp (route, direction) theo số chuyến GTFS.
+
+    w_freq(s, r, dir, h) = trips(r, dir, h) / Σ_{r',dir' phục vụ ga s tại giờ h} trips(r', dir', h)
+
+    Σ trọng số trên mỗi (station, hour) = 1 → bảo toàn tổng lượng cầu ga khi phân bổ.
+    Đây là bản nâng cấp của `build_station_route_hour_weights` (thêm chiều direction).
+    """
+    aliases = route_aliases or {}
+    sr = station_to_routes[["station_complex_id", "route"]].drop_duplicates().copy()
+    sr["route"] = sr["route"].astype(str).replace(aliases)
+    sr["station_complex_id"] = sr["station_complex_id"].astype(str)
+
+    hw = headway.copy()
+    hw["route_id"] = hw["route_id"].astype(str)
+    hw["direction_id"] = pd.to_numeric(hw["direction_id"], errors="coerce").fillna(0).astype(int)
+    hw["hour"] = hw["hour"].astype(int)
+    hw = hw.loc[hw["trip_count"] >= int(min_trips), ["route_id", "direction_id", "hour", "trip_count"]]
+
+    merged = sr.merge(hw, left_on="route", right_on="route_id", how="inner")
+    if merged.empty:
+        raise ValueError("Không dựng được trọng số ga×route×direction×giờ từ GTFS headway")
+
+    station_totals = (
+        merged.groupby(["station_complex_id", "hour"], as_index=False)["trip_count"]
+        .sum()
+        .rename(columns={"trip_count": "weight_station"})
+    )
+    merged = merged.merge(station_totals, on=["station_complex_id", "hour"])
+    merged["alloc_weight"] = merged["trip_count"] / merged["weight_station"].clip(lower=1e-9)
+    return merged[
+        ["station_complex_id", "route", "direction_id", "hour", "trip_count", "weight_station", "alloc_weight"]
+    ]
+
+
+def build_station_travel_offsets(
+    offset_templates: pd.DataFrame,
+    station_stop_map: pd.DataFrame,
+    *,
+    run_delay_min: float = 0.0,
+) -> pd.DataFrame:
+    """Ma trận thời gian hành trình T_travel(route, dir, station) từ bến đầu → ga.
+
+    `offset_templates` (từ `load_gtfs_stop_offset_templates`) cho median offset (phút) của
+    từng stop so với departure đầu trip — chính là run-time lịch sử theo GTFS. Nối với
+    `station_stop_map` (station_complex_id ↔ parent_stop_id) để quy về cấp ga.
+
+    `run_delay_min`: đệm trễ chạy tàu lịch sử cộng thêm (mặc định 0 — GTFS offset đã gồm run-time).
+    Trả về: station_complex_id, route_id, direction_id, stop_sequence, travel_offset_min.
+    """
+    ot = offset_templates.copy()
+    ot["route_id"] = ot["route_id"].astype(str)
+    ot["direction_id"] = pd.to_numeric(ot["direction_id"], errors="coerce").fillna(0).astype(int)
+    ot["parent_stop_id"] = ot["parent_stop_id"].astype(str)
+
+    sm = station_stop_map[["station_complex_id", "parent_stop_id"]].copy()
+    sm["station_complex_id"] = sm["station_complex_id"].astype(str)
+    sm["parent_stop_id"] = sm["parent_stop_id"].astype(str)
+
+    merged = ot.merge(sm, on="parent_stop_id", how="inner")
+    if merged.empty:
+        return pd.DataFrame(
+            columns=["station_complex_id", "route_id", "direction_id", "stop_sequence", "travel_offset_min"]
+        )
+    merged["travel_offset_min"] = merged["offset_min"].astype(float) + float(run_delay_min)
+    out = (
+        merged.groupby(["station_complex_id", "route_id", "direction_id"], as_index=False)
+        .agg(travel_offset_min=("travel_offset_min", "median"), stop_sequence=("stop_sequence", "median"))
+    )
+    out["travel_offset_min"] = out["travel_offset_min"].clip(lower=0.0)
+    return out
+
+
+def project_station_demand_to_departures(
+    station_demand: pd.DataFrame,
+    station_rd_weights: pd.DataFrame,
+    travel_offsets: pd.DataFrame,
+    *,
+    slot_route: np.ndarray,
+    slot_dir: np.ndarray,
+    slot_hour: np.ndarray,
+    board_minute: float = 30.0,
+    return_frame: bool = False,
+) -> np.ndarray | tuple[np.ndarray, pd.DataFrame]:
+    """Chiếu ngược Không–Thời gian: cầu ga (giờ quẹt thẻ) → cầu trục xuất bến (route, dir, giờ).
+
+    Với mỗi hành khách quẹt thẻ vào ga s lúc giờ h_board:
+      - Phân bổ về (route r, direction dir) theo trọng số tần suất w_freq(s, r, dir, h_board).
+      - Khấu trừ thời gian hành trình: t0 = h_board·60 + board_minute − T_travel(r, dir, s).
+      - Dồn lượng cầu về giờ xuất bến h0 = floor(t0 / 60) mod 24.
+
+    Kết quả: mảng demand theo trục xuất bến, căn theo OPT_SCOPE (slot_route, slot_dir, slot_hour).
+    Thay thế hoàn toàn cơ chế `direction_share` / `allocate_demand_to_slots` cũ.
+    """
+    sd = station_demand.copy()
+    sd["station_complex_id"] = sd["station_complex_id"].astype(str)
+    sd["hour"] = sd["hour"].astype(int)
+    sd["demand"] = pd.to_numeric(sd["demand"], errors="coerce").fillna(0.0).clip(lower=0.0)
+
+    w = station_rd_weights.copy()
+    w["station_complex_id"] = w["station_complex_id"].astype(str)
+    w["route"] = w["route"].astype(str)
+    w["direction_id"] = pd.to_numeric(w["direction_id"], errors="coerce").fillna(0).astype(int)
+    w["hour"] = w["hour"].astype(int)
+
+    # B1: phân bổ cầu ga → (route, direction) tại giờ quẹt thẻ
+    routed = sd.merge(w, on=["station_complex_id", "hour"], how="inner")
+    routed["demand_rd"] = routed["demand"] * routed["alloc_weight"]
+
+    # B2: nối ma trận thời gian hành trình → khấu trừ về trục xuất bến
+    to = travel_offsets.rename(columns={"route_id": "route"}).copy()
+    to["route"] = to["route"].astype(str)
+    to["direction_id"] = pd.to_numeric(to["direction_id"], errors="coerce").fillna(0).astype(int)
+    routed = routed.merge(
+        to[["station_complex_id", "route", "direction_id", "travel_offset_min"]],
+        on=["station_complex_id", "route", "direction_id"],
+        how="left",
+    )
+    routed["travel_offset_min"] = routed["travel_offset_min"].fillna(0.0)
+
+    board_min = routed["hour"].to_numpy() * 60.0 + float(board_minute)
+    depart_min = board_min - routed["travel_offset_min"].to_numpy()
+    routed["dep_hour"] = (np.floor(depart_min / 60.0).astype(int)) % 24
+
+    # B3: dồn về (route, direction, giờ xuất bến)
+    dep_demand = (
+        routed.groupby(["route", "direction_id", "dep_hour"], as_index=False)["demand_rd"]
+        .sum()
+        .rename(columns={"demand_rd": "demand", "dep_hour": "hour"})
+    )
+
+    lookup = dep_demand.set_index(["route", "direction_id", "hour"])["demand"]
+    n = len(slot_route)
+    out = np.zeros(n, dtype=float)
+    for i in range(n):
+        key = (str(slot_route[i]), int(slot_dir[i]), int(slot_hour[i]))
+        val = lookup.get(key)
+        if val is not None and np.isfinite(val):
+            out[i] = float(val)
+
+    if return_frame:
+        return out, dep_demand
     return out
 
 
@@ -1575,6 +1734,11 @@ def compute_merged_trip_bounds(
     baseline_trips: np.ndarray,
     slot_hour: np.ndarray,
     *,
+    demand: np.ndarray | None = None,
+    slot_route: np.ndarray | None = None,
+    peak_percentile: float = 75.0,
+    overnight_percentile: float = 20.0,
+    daytime_factor: float | None = None,
     peak_factor: float = 1.40,
     offpeak_factor: float = 1.15,
     overnight_factor: float = 1.05,
@@ -1585,10 +1749,18 @@ def compute_merged_trip_bounds(
     max_headway_min: float = 20.0,
     overnight_max_headway_min: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Dynamic baseline bounds ∩ headway bounds (một nguồn sự thật cho §5)."""
+    """Dynamic baseline bounds ∩ headway bounds (một nguồn sự thật cho §5).
+
+    Truyền `demand` (trục xuất bến) để bật phát hiện overnight động; nếu None → giờ tĩnh.
+    """
     dyn_min, dyn_max = build_dynamic_bounds(
         baseline_trips,
         slot_hour,
+        demand=demand,
+        slot_route=slot_route,
+        peak_percentile=peak_percentile,
+        overnight_percentile=overnight_percentile,
+        daytime_factor=daytime_factor,
         peak_factor=peak_factor,
         offpeak_factor=offpeak_factor,
         overnight_factor=overnight_factor,
@@ -1622,10 +1794,14 @@ def trips_bounds_for_scenario(
     rainy_peak_hours: tuple[int, ...] = (),
     rainy_peak_min_factor: float = 0.65,
     trips_min_factor: float = 0.5,
+    rainy_daytime_max_factor: float | None = None,
     rainy_offpeak_max_factor: float | None = None,
     peak_hours: tuple[int, ...] = (7, 8, 9, 17, 18, 19),
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Per-scenario TRIPS_MIN/TRIPS_MAX (rainy peak floor, rainy off-peak ceiling)."""
+    """Per-scenario TRIPS_MIN/TRIPS_MAX (rainy peak floor, rainy daytime ceiling)."""
+    rainy_day_max = rainy_daytime_max_factor
+    if rainy_day_max is None:
+        rainy_day_max = rainy_offpeak_max_factor
     tmin = np.asarray(trips_min, dtype=int).copy()
     tmax = np.asarray(trips_max, dtype=int).copy()
     hrs = np.asarray(slot_hour, dtype=int)
@@ -1635,12 +1811,11 @@ def trips_bounds_for_scenario(
             rainy_peak = np.isin(hrs, rainy_peak_hours)
             boosted_min = np.ceil(base[rainy_peak] * rainy_peak_min_factor).astype(int)
             tmin[rainy_peak] = np.maximum(tmin[rainy_peak], boosted_min)
-        if rainy_offpeak_max_factor is not None:
-            is_peak = np.isin(hrs, peak_hours)
-            is_overnight = (hrs <= 6) | (hrs >= 23)
-            rainy_off = ~(is_peak | is_overnight)
-            boosted_max = np.floor(base[rainy_off] * float(rainy_offpeak_max_factor)).astype(int)
-            tmax[rainy_off] = np.maximum(tmax[rainy_off], boosted_max)
+        if rainy_day_max is not None:
+            is_overnight = np.array([is_overnight_hour(h) for h in hrs], dtype=bool)
+            rainy_day = ~is_overnight
+            boosted_max = np.floor(base[rainy_day] * float(rainy_day_max)).astype(int)
+            tmax[rainy_day] = np.maximum(tmax[rainy_day], boosted_max)
             tmax = np.maximum(tmax, tmin)
     return tmin, tmax
 
@@ -2122,13 +2297,17 @@ def add_lag_features(
     *,
     use_lags: bool = True,
     lag_cols: list[str] | None = None,
+    entity_col: str = "route_id",
 ) -> pd.DataFrame:
-    """Lag cùng giờ: 24h, 168h, rolling 7d (ITM 2026 / LSTM MTA papers)."""
+    """Lag cùng giờ tại CÙNG thực thể: 24h, 168h, rolling 7d (ITM 2026 / LSTM MTA papers).
+
+    `entity_col` = "station_complex_id" cho dự báo cấp ga, "route_id" cho legacy cấp tuyến.
+    """
     lag_cols = lag_cols or DEFAULT_LAG_COLS
     if not use_lags:
         return d
-    out = d.sort_values(["route_id", "hour", "date"]).copy()
-    g = out.groupby(["route_id", "hour"])["demand"]
+    out = d.sort_values([entity_col, "hour", "date"]).copy()
+    g = out.groupby([entity_col, "hour"])["demand"]
     out["demand_lag_24h"] = g.shift(1)
     out["demand_lag_168h"] = g.shift(7)
     out["demand_rolling_7d"] = g.transform(lambda s: s.shift(1).rolling(7, min_periods=1).mean())
@@ -2138,17 +2317,18 @@ def add_lag_features(
         ("demand_rolling_7d", "log_rolling_7d"),
     ]:
         out[log_c] = np.log1p(out[raw].clip(lower=0))
-    return out.sort_values(["route_id", "date", "hour"]).reset_index(drop=True)
+    return out.sort_values([entity_col, "date", "hour"]).reset_index(drop=True)
 
 
 def fill_lag_from_train(
     d: pd.DataFrame,
     ref: pd.DataFrame,
     lag_cols: list[str] | None = None,
+    entity_col: str = "route_id",
 ) -> pd.DataFrame:
     lag_cols = lag_cols or DEFAULT_LAG_COLS
-    lag_medians = ref.groupby(["route_id", "hour"])[lag_cols].median().reset_index()
-    out = d.merge(lag_medians, on=["route_id", "hour"], how="left", suffixes=("", "_fill"))
+    lag_medians = ref.groupby([entity_col, "hour"])[lag_cols].median().reset_index()
+    out = d.merge(lag_medians, on=[entity_col, "hour"], how="left", suffixes=("", "_fill"))
     for c in lag_cols:
         fill_c = f"{c}_fill"
         if fill_c in out.columns:
@@ -2189,11 +2369,21 @@ def build_demand_model(
     n_num_features: int,
     *,
     use_route_embedding: bool = False,
+    embedding_dim: int | None = None,
     hidden: tuple[int, ...] = (64, 32),
     dropout: float = 0.25,
     use_batch_norm: bool = True,
 ) -> Model:
-    """MLP residual log-demand (Huber) — BatchNorm theo best practice DL traffic."""
+    """MLP residual log-demand (Huber) — BatchNorm theo best practice DL traffic.
+
+    `n_routes` đóng vai trò là số thực thể có embedding (route HOẶC station). Với dự báo
+    cấp ga (hàng trăm ga) nên dùng `embedding_dim` lớn hơn (vd. 8–16). Input vẫn tên
+    "route_idx" để tương thích artifact/runtime; thực chất là chỉ số thực thể (entity index).
+
+    Lớp output ép kiểu float32 (an toàn khi bật mixed-precision 'mixed_float16').
+    """
+    if embedding_dim is None:
+        embedding_dim = 4 if n_routes <= 40 else int(min(16, max(6, round(n_routes ** 0.25 * 2))))
     inp_num = Input(shape=(n_num_features,), name="num_features")
     x = inp_num
     inputs: list[Any] = [inp_num]
@@ -2202,7 +2392,7 @@ def build_demand_model(
         inp_route = Input(shape=(1,), name="route_idx", dtype="int32")
         route_emb = layers.Embedding(
             n_routes,
-            4,
+            int(embedding_dim),
             name="route_emb",
             embeddings_regularizer=tf.keras.regularizers.l2(1e-3),
         )(inp_route)
@@ -2222,7 +2412,9 @@ def build_demand_model(
         if dropout > 0:
             x = layers.Dropout(dropout, name=f"dropout_{i}")(x)
 
-    out = layers.Dense(1, name="residual_log_demand", kernel_initializer="zeros")(x)
+    out = layers.Dense(
+        1, name="residual_log_demand", kernel_initializer="zeros", dtype="float32"
+    )(x)
     model = Model(inputs, out)
     model.compile(
         optimizer=tf.keras.optimizers.Adam(3e-4),

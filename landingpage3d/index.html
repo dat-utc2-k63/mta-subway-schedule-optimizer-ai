@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NYC Subway Scheduling Optimization — 3D Experience</title>
-  <meta name="description" content="A scroll journey through open landscape — AI-driven schedule optimization for the MTA." />
+  <title>Tối ưu Lịch trình Tàu điện ngầm NYC — Trải nghiệm 3D</title>
+  <meta name="description" content="Hành trình cuộn trang qua không gian mở — tối ưu lịch chạy tàu điện ngầm MTA bằng AI." />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -19,7 +19,7 @@
 
   <div id="progress-bar" class="progress-bar" aria-hidden="true"></div>
 
-  <nav id="navbar" class="navbar" aria-label="Main navigation">
+  <nav id="navbar" class="navbar" aria-label="Điều hướng chính">
     <div class="nav-inner">
       <a href="#hero" class="nav-logo">
         <svg class="nav-logo-icon" viewBox="0 0 28 28" fill="none" aria-hidden="true">
@@ -29,9 +29,9 @@
         <span>MTA Optimizer</span>
       </a>
       <div class="nav-links">
-        <a href="#section-cost">Cost</a>
-        <a href="#section-wait">Wait Time</a>
-        <a href="#section-terminal">Summary</a>
+        <a href="#section-cost">Chi phí</a>
+        <a href="#section-wait">Thời gian chờ</a>
+        <a href="#section-terminal">Tổng kết</a>
       </div>
     </div>
   </nav>
@@ -40,7 +40,7 @@
     <canvas id="spline-canvas"></canvas>
     <div id="spline-placeholder" class="spline-placeholder">
       <div class="spline-placeholder__gradient"></div>
-      <p id="spline-status" class="spline-placeholder__status">Loading scene…</p>
+      <p id="spline-status" class="spline-placeholder__status">Đang tải cảnh 3D…</p>
     </div>
   </div>
 
@@ -48,17 +48,17 @@
 
     <section id="hero" class="section section--hero" data-section="0">
       <div class="section-panel section-panel--left" data-reveal>
-        <p class="section-badge" data-fade>K63 Thesis — UTC2</p>
+        <p class="section-badge" data-fade>Đồ án K63 — UTC2</p>
         <h1 class="hero-title">
-          <span class="line-wrap" data-split><span class="line-inner">NYC Subway</span></span>
-          <span class="line-wrap" data-split><span class="line-inner">Schedule</span></span>
-          <span class="line-wrap hero-title-accent" data-split><span class="line-inner">Optimization</span></span>
+          <span class="line-wrap" data-split><span class="line-inner">Tàu điện ngầm NYC</span></span>
+          <span class="line-wrap" data-split><span class="line-inner">Tối ưu</span></span>
+          <span class="line-wrap hero-title-accent" data-split><span class="line-inner">Lịch trình</span></span>
         </h1>
         <p class="hero-subtitle" data-fade>
-          Predict ridership. Optimize headways. Balance operating cost and passenger wait time.
+          Dự báo lượng khách. Tối ưu giãn cách chuyến. Cân bằng chi phí vận hành và thời gian chờ của hành khách.
         </p>
         <div class="hero-scroll-hint" data-fade>
-          <span>Scroll</span>
+          <span>Cuộn xuống</span>
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
             <path d="M10 4L10 16M5 11L10 16L15 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
@@ -68,76 +68,86 @@
 
     <section id="section-cost" class="section section--cost" data-section="1">
       <div class="section-panel section-panel--right" data-reveal>
-        <p class="section-label" data-fade>Along the line</p>
+        <p class="section-label" data-fade>Dọc theo tuyến</p>
         <h2 class="section-heading">
-          <span class="line-wrap" data-split><span class="line-inner">Cost</span></span>
-          <span class="line-wrap" data-split><span class="line-inner">Optimization</span></span>
+          <span class="line-wrap" data-split><span class="line-inner">Tối ưu</span></span>
+          <span class="line-wrap" data-split><span class="line-inner">Chi phí</span></span>
         </h2>
         <p class="section-text" data-fade>
-          Match fleet deployment to real demand. Fewer empty runs, smarter trade-offs between service frequency and operating budget.
+          Bố trí đoàn tàu khớp với nhu cầu thực tế. Giảm chuyến chạy rỗng, đánh đổi thông minh giữa tần suất phục vụ và ngân sách vận hành.
         </p>
+        <ul class="topic-list" data-fade>
+          <li>Cắt giảm chuyến thừa ở khung giờ thấp điểm và ban đêm</li>
+          <li>Ước tính số đoàn tàu tối thiểu cần để vận hành mỗi tuyến</li>
+          <li>Quy đổi mỗi phương án ra chi phí giờ-tàu để so sánh trực tiếp</li>
+        </ul>
       </div>
     </section>
 
     <section id="section-wait" class="section section--wait" data-section="2">
       <div class="section-panel section-panel--left" data-reveal>
-        <p class="section-label" data-fade>Midtown platform</p>
+        <p class="section-label" data-fade>Ga trung tâm</p>
         <h2 class="section-heading">
-          <span class="line-wrap" data-split><span class="line-inner">Wait Time</span></span>
-          <span class="line-wrap" data-split><span class="line-inner">Optimization</span></span>
+          <span class="line-wrap" data-split><span class="line-inner">Tối ưu</span></span>
+          <span class="line-wrap" data-split><span class="line-inner">Thời gian chờ</span></span>
         </h2>
         <p class="section-text" data-fade>
-          Tighter headways when crowds surge. Consolidated trips when demand fades — keeping every stop predictable.
+          Giãn cách dày hơn khi lượng khách tăng vọt. Gộp chuyến khi nhu cầu giảm — giữ cho mọi ga luôn dễ đoán giờ tàu.
         </p>
+        <ul class="topic-list" data-fade>
+          <li>Dự báo nhu cầu theo từng giờ, từng tuyến và chiều chạy</li>
+          <li>Tự động siết giãn cách trong giờ cao điểm sáng và chiều</li>
+          <li>Cân bằng giữa trải nghiệm hành khách và mức quá tải cho phép</li>
+        </ul>
       </div>
     </section>
 
     <section id="section-terminal" class="section section--terminal" data-section="3">
       <div class="terminal-grid" data-reveal>
         <div class="terminal-summary section-panel">
-          <p class="section-label" data-fade>Final stop</p>
+          <p class="section-label" data-fade>Ga cuối</p>
           <h2 class="section-heading">
-            <span class="line-wrap" data-split><span class="line-inner">Journey</span></span>
-            <span class="line-wrap" data-split><span class="line-inner">complete</span></span>
+            <span class="line-wrap" data-split><span class="line-inner">Hành trình</span></span>
+            <span class="line-wrap" data-split><span class="line-inner">hoàn tất</span></span>
           </h2>
           <p class="section-text" data-fade>
-            The train reaches the terminal — schedules optimized, every stop served. From departure board to last platform, the full pipeline delivers a smarter timetable.
+            Tàu về tới ga cuối — lịch trình đã tối ưu, mọi ga đều được phục vụ. Từ bảng giờ khởi hành đến sân ga cuối, toàn bộ quy trình cho ra một thời gian biểu thông minh hơn.
           </p>
           <ul class="topic-list" data-fade>
-            <li>Forecast passenger demand hour by hour</li>
-            <li>Adjust trip frequency with constrained optimization</li>
-            <li>Balance rider comfort against fleet operating cost</li>
+            <li>Dự báo nhu cầu hành khách theo từng giờ</li>
+            <li>Điều chỉnh tần suất chuyến bằng tối ưu có ràng buộc</li>
+            <li>Cân bằng sự thoải mái của khách với chi phí vận hành đoàn tàu</li>
           </ul>
           <div class="terminal-cta" data-fade>
             <a href="#" id="cta-dashboard" class="cta-button cta-button--primary">
-              View Dashboard
+              Mở bảng điều khiển
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </a>
           </div>
           <footer class="footer-info" data-fade>
-            <p>University of Transport and Communications — K63</p>
+            <p>Trường Đại học Giao thông Vận tải — K63</p>
           </footer>
         </div>
 
         <div class="feedback-form-wrap section-panel" data-fade>
-          <h3 class="form-title">Your feedback</h3>
-          <p class="form-subtitle">Demo only — not saved.</p>
+          <h3 class="form-title">Góp ý của bạn</h3>
+          <p class="form-subtitle">Chỉ là demo — không được lưu lại.</p>
           <form id="feedback-form" class="feedback-form" novalidate>
             <label class="form-field">
-              <span class="form-label">Name</span>
-              <input type="text" name="name" placeholder="Optional" autocomplete="name" />
+              <span class="form-label">Tên</span>
+              <input type="text" name="name" placeholder="Không bắt buộc" autocomplete="name" />
             </label>
             <label class="form-field">
-              <span class="form-label">Comment</span>
-              <textarea name="comment" rows="3" placeholder="Thoughts on the schedule?"></textarea>
+              <span class="form-label">Nhận xét</span>
+              <textarea name="comment" rows="3" placeholder="Bạn nghĩ gì về lịch trình?"></textarea>
             </label>
             <button type="button" id="form-submit-demo" class="cta-button cta-button--ghost form-submit">
-              Send
+              Gửi
             </button>
             <p id="form-toast" class="form-toast" role="status" aria-live="polite" hidden>
-              Demo form — submissions are not collected.
+              Biểu mẫu demo — nội dung không được thu thập.
             </p>
           </form>
         </div>

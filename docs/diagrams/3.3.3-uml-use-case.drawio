@@ -1,0 +1,75 @@
+<mxfile host="app.diagrams.net" modified="2026-06-25T00:00:00.000Z" agent="Cursor" version="24.0.0">
+  <diagram id="uc-main" name="3.3.3 Use Case">
+    <mxGraphModel dx="1100" dy="750" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1000" pageHeight="680" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="title" value="Hình 3.3 — Use Case: Hệ thống tối ưu lịch MTA" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=13;fontStyle=1;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="200" y="12" width="600" height="25" as="geometry"/>
+        </mxCell>
+        <!-- Actors -->
+        <mxCell id="ar" value="Nhà nghiên cứu" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="120" width="40" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="ad" value="Điều độ viên" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="420" width="40" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="adt" value="Dữ liệu MTA" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="920" y="200" width="40" height="70" as="geometry"/>
+        </mxCell>
+        <!-- Offline use cases -->
+        <mxCell id="uc1" value="Huấn luyện dự báo cấp ga" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="200" y="80" width="130" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="uc2" value="Departure-Time Projection" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="380" y="80" width="140" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="uc3" value="Quét Pareto chọn λ" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="580" y="80" width="120" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="uc4" value="Tối ưu lịch trình" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="760" y="80" width="110" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="uc5" value="Xuất artifacts" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="480" y="180" width="110" height="50" as="geometry"/>
+        </mxCell>
+        <!-- Online use cases -->
+        <mxCell id="uc6" value="Xem metadata tuyến" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="200" y="320" width="120" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="uc7" value="Tra cứu profile ngày" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="380" y="320" width="120" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="uc8" value="Tối ưu theo ngày / kịch bản" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="560" y="320" width="140" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="uc9" value="Xem lịch theo ga" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="760" y="320" width="110" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="uc10" value="So sánh GTFS vs AI" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="480" y="420" width="120" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="uc11" value="Mô phỏng lan truyền trễ" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="480" y="280" width="130" height="50" as="geometry"/>
+        </mxCell>
+        <!-- include -->
+        <mxCell id="i1" value="&amp;lt;&amp;lt;include&amp;gt;&amp;gt;" style="endArrow=open;endFill=0;dashed=1;strokeColor=#000000;fontColor=#000000;fontSize=9;html=1;" edge="1" parent="1" source="uc1" target="uc2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="i2" value="&amp;lt;&amp;lt;include&amp;gt;&amp;gt;" style="endArrow=open;endFill=0;dashed=1;strokeColor=#000000;fontColor=#000000;fontSize=9;html=1;" edge="1" parent="1" source="uc2" target="uc3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="i3" value="&amp;lt;&amp;lt;include&amp;gt;&amp;gt;" style="endArrow=open;endFill=0;dashed=1;strokeColor=#000000;fontColor=#000000;fontSize=9;html=1;" edge="1" parent="1" source="uc3" target="uc4"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="i4" value="&amp;lt;&amp;lt;include&amp;gt;&amp;gt;" style="endArrow=open;endFill=0;dashed=1;strokeColor=#000000;fontColor=#000000;fontSize=9;html=1;" edge="1" parent="1" source="uc4" target="uc5"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="i5" value="&amp;lt;&amp;lt;include&amp;gt;&amp;gt;" style="endArrow=open;endFill=0;dashed=1;strokeColor=#000000;fontColor=#000000;fontSize=9;html=1;" edge="1" parent="1" source="uc8" target="uc5"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="i6" value="&amp;lt;&amp;lt;include&amp;gt;&amp;gt;" style="endArrow=open;endFill=0;dashed=1;strokeColor=#000000;fontColor=#000000;fontSize=9;html=1;" edge="1" parent="1" source="uc10" target="uc8"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <!-- associations -->
+        <mxCell id="a1" style="endArrow=none;strokeColor=#000000;html=1;" edge="1" parent="1" source="ar" target="uc1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a2" style="endArrow=none;strokeColor=#000000;html=1;" edge="1" parent="1" source="ar" target="uc5"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a3" style="endArrow=none;strokeColor=#000000;html=1;" edge="1" parent="1" source="ar" target="uc11"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a4" style="endArrow=none;strokeColor=#000000;html=1;" edge="1" parent="1" source="ad" target="uc6"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a5" style="endArrow=none;strokeColor=#000000;html=1;" edge="1" parent="1" source="ad" target="uc7"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a6" style="endArrow=none;strokeColor=#000000;html=1;" edge="1" parent="1" source="ad" target="uc8"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a7" style="endArrow=none;strokeColor=#000000;html=1;" edge="1" parent="1" source="ad" target="uc9"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a8" style="endArrow=none;strokeColor=#000000;html=1;" edge="1" parent="1" source="ad" target="uc10"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a9" style="endArrow=none;strokeColor=#000000;html=1;" edge="1" parent="1" source="adt" target="uc1"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

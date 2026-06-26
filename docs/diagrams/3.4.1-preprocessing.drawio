@@ -1,0 +1,32 @@
+<mxfile host="app.diagrams.net" modified="2026-06-25T00:00:00.000Z" agent="Cursor" version="24.0.0">
+  <diagram id="act-preproc" name="3.4.1 Activity Preprocessing">
+    <mxGraphModel dx="600" dy="700" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="480" pageHeight="720" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/><mxCell id="1" parent="0"/>
+        <mxCell id="title" value="Hình 3.4.1 — Activity: Tiền xử lý và chiếu xuất bến" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=12;fontStyle=1;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="40" y="12" width="400" height="25" as="geometry"/>
+        </mxCell>
+        <mxCell id="start" value="" style="ellipse;fillColor=#000000;strokeColor=#000000;html=1;" vertex="1" parent="1"><mxGeometry x="225" y="45" width="30" height="30" as="geometry"/></mxCell>
+        <mxCell id="a1" value="Nạp ridership, GTFS, thời tiết" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;arcSize=20;" vertex="1" parent="1"><mxGeometry x="155" y="90" width="170" height="40" as="geometry"/></mxCell>
+        <mxCell id="a2" value="Gộp theo (ga, ngày, giờ)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;arcSize=20;" vertex="1" parent="1"><mxGeometry x="165" y="150" width="150" height="40" as="geometry"/></mxCell>
+        <mxCell id="a3" value="Mã hóa chu kỳ sin/cos" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;arcSize=20;" vertex="1" parent="1"><mxGeometry x="165" y="210" width="150" height="40" as="geometry"/></mxCell>
+        <mxCell id="a4" value="Tạo lag 24h, 168h, rolling 7d" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;arcSize=20;" vertex="1" parent="1"><mxGeometry x="145" y="270" width="190" height="40" as="geometry"/></mxCell>
+        <mxCell id="a5" value="Ghép biến khí tượng" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;arcSize=20;" vertex="1" parent="1"><mxGeometry x="165" y="330" width="150" height="40" as="geometry"/></mxCell>
+        <mxCell id="a6" value="Tính ma trận trọng số ga → tuyến" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;arcSize=20;" vertex="1" parent="1"><mxGeometry x="130" y="390" width="220" height="40" as="geometry"/></mxCell>
+        <mxCell id="a7" value="Departure-Time Projection" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;arcSize=20;" vertex="1" parent="1"><mxGeometry x="145" y="450" width="190" height="40" as="geometry"/></mxCell>
+        <mxCell id="a8" value="Đầu ra: đặc trưng ga + cầu xuất bến" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;arcSize=20;" vertex="1" parent="1"><mxGeometry x="125" y="510" width="230" height="40" as="geometry"/></mxCell>
+        <mxCell id="end_o" value="" style="ellipse;fillColor=none;strokeColor=#000000;strokeWidth=2;html=1;" vertex="1" parent="1"><mxGeometry x="220" y="575" width="40" height="40" as="geometry"/></mxCell>
+        <mxCell id="end_i" value="" style="ellipse;fillColor=#000000;strokeColor=#000000;html=1;" vertex="1" parent="1"><mxGeometry x="230" y="585" width="20" height="20" as="geometry"/></mxCell>
+        <mxCell id="f0" style="endArrow=block;endFill=1;strokeColor=#000000;html=1;" edge="1" parent="1" source="start" target="a1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f1" style="endArrow=block;endFill=1;strokeColor=#000000;html=1;" edge="1" parent="1" source="a1" target="a2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f2" style="endArrow=block;endFill=1;strokeColor=#000000;html=1;" edge="1" parent="1" source="a2" target="a3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f3" style="endArrow=block;endFill=1;strokeColor=#000000;html=1;" edge="1" parent="1" source="a3" target="a4"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f4" style="endArrow=block;endFill=1;strokeColor=#000000;html=1;" edge="1" parent="1" source="a4" target="a5"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f5" style="endArrow=block;endFill=1;strokeColor=#000000;html=1;" edge="1" parent="1" source="a5" target="a6"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f6" style="endArrow=block;endFill=1;strokeColor=#000000;html=1;" edge="1" parent="1" source="a6" target="a7"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f7" style="endArrow=block;endFill=1;strokeColor=#000000;html=1;" edge="1" parent="1" source="a7" target="a8"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f8" style="endArrow=block;endFill=1;strokeColor=#000000;html=1;" edge="1" parent="1" source="a8" target="end_o"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,10 +1,10 @@
 {
-  "route_id": "J",
+  "route_id": "F",
   "n_slots": 48,
   "lambda_knee": 92.0,
-  "f1_knee": 305634.71763174265,
-  "f2_knee": 826.5166666666667,
-  "total_trips_knee": 422.0,
-  "f1_improve_pct": 32.05899468448019,
-  "f2_delta_pct": 48.06819538994389
+  "f1_knee": 604793.1649571593,
+  "f2_knee": 1783.0,
+  "total_trips_knee": 527.0,
+  "f1_improve_pct": 25.99761760325559,
+  "f2_delta_pct": 35.82347265248085
 }

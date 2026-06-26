@@ -1,0 +1,33 @@
+<mxfile host="app.diagrams.net" modified="2026-06-25T00:00:00.000Z" agent="Cursor" version="24.0.0">
+  <diagram id="act-queue" name="3.5.1 Activity Queue">
+    <mxGraphModel dx="650" dy="750" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="520" pageHeight="800" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/><mxCell id="1" parent="0"/>
+        <mxCell id="title" value="Hình 3.5.1 — Activity: Mô phỏng hàng đợi lan truyền" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=12;fontStyle=1;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="12" width="400" height="25" as="geometry"/>
+        </mxCell>
+        <mxCell id="start" value="" style="ellipse;fillColor=#000000;strokeColor=#000000;html=1;" vertex="1" parent="1"><mxGeometry x="245" y="45" width="30" height="30" as="geometry"/></mxCell>
+        <mxCell id="a1" value="Nhận cầu khách và số chuyến theo giờ" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;arcSize=20;" vertex="1" parent="1"><mxGeometry x="130" y="90" width="260" height="40" as="geometry"/></mxCell>
+        <mxCell id="a2" value="t = 1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;arcSize=20;" vertex="1" parent="1"><mxGeometry x="215" y="150" width="90" height="35" as="geometry"/></mxCell>
+        <mxCell id="a3" value="Tính sức chở từ trips × capacity" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;arcSize=20;" vertex="1" parent="1"><mxGeometry x="145" y="205" width="230" height="40" as="geometry"/></mxCell>
+        <mxCell id="a4" value="Cập nhật hàng đợi: Q_t = max(0, Q_{t-1}+D_t-C_t)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=9;arcSize=20;" vertex="1" parent="1"><mxGeometry x="100" y="265" width="320" height="45" as="geometry"/></mxCell>
+        <mxCell id="a5" value="Tích lũy thời gian chờ hành khách" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;arcSize=20;" vertex="1" parent="1"><mxGeometry x="135" y="330" width="250" height="40" as="geometry"/></mxCell>
+        <mxCell id="d1" value="t &lt; 24?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;" vertex="1" parent="1"><mxGeometry x="215" y="390" width="90" height="55" as="geometry"/></mxCell>
+        <mxCell id="a6" value="t = t + 1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;arcSize=20;" vertex="1" parent="1"><mxGeometry x="380" y="400" width="90" height="35" as="geometry"/></mxCell>
+        <mxCell id="a7" value="Tổng hợp: chờ, VH, overflow, max queue" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=10;arcSize=20;" vertex="1" parent="1"><mxGeometry x="120" y="480" width="280" height="40" as="geometry"/></mxCell>
+        <mxCell id="end_o" value="" style="ellipse;fillColor=none;strokeColor=#000000;strokeWidth=2;html=1;" vertex="1" parent="1"><mxGeometry x="240" y="545" width="40" height="40" as="geometry"/></mxCell>
+        <mxCell id="end_i" value="" style="ellipse;fillColor=#000000;strokeColor=#000000;html=1;" vertex="1" parent="1"><mxGeometry x="250" y="555" width="20" height="20" as="geometry"/></mxCell>
+        <mxCell id="f0" style="endArrow=block;endFill=1;strokeColor=#000000;html=1;" edge="1" parent="1" source="start" target="a1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f1" style="endArrow=block;endFill=1;strokeColor=#000000;html=1;" edge="1" parent="1" source="a1" target="a2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f2" style="endArrow=block;endFill=1;strokeColor=#000000;html=1;" edge="1" parent="1" source="a2" target="a3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f3" style="endArrow=block;endFill=1;strokeColor=#000000;html=1;" edge="1" parent="1" source="a3" target="a4"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f4" style="endArrow=block;endFill=1;strokeColor=#000000;html=1;" edge="1" parent="1" source="a4" target="a5"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f5" style="endArrow=block;endFill=1;strokeColor=#000000;html=1;" edge="1" parent="1" source="a5" target="d1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f6" value="[có]" style="endArrow=block;endFill=1;strokeColor=#000000;fontColor=#000000;fontSize=9;html=1;" edge="1" parent="1" source="d1" target="a6"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f7" style="endArrow=block;endFill=1;strokeColor=#000000;html=1;" edge="1" parent="1" source="a6" target="a3"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="425" y="340"/><mxPoint x="480" y="340"/><mxPoint x="480" y="225"/><mxPoint x="375" y="225"/></Array></mxGeometry></mxCell>
+        <mxCell id="f8" value="[không]" style="endArrow=block;endFill=1;strokeColor=#000000;fontColor=#000000;fontSize=9;html=1;" edge="1" parent="1" source="d1" target="a7"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f9" style="endArrow=block;endFill=1;strokeColor=#000000;html=1;" edge="1" parent="1" source="a7" target="end_o"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

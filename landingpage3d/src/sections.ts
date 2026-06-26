@@ -78,8 +78,7 @@ export function initDashboardLink(): void {
   const cta = document.getElementById('cta-dashboard') as HTMLAnchorElement | null;
   if (!cta) return;
 
-  const dashboardUrl =
-    import.meta.env.VITE_DASHBOARD_URL?.trim() || '/optimizer';
+  const dashboardUrl = import.meta.env.VITE_DASHBOARD_URL?.trim() || './optimizer.html';
   cta.href = dashboardUrl;
   if (dashboardUrl.startsWith('http')) {
     cta.target = '_blank';

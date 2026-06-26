@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MTA Optimizer — Bảng điều khiển tối ưu lịch trình</title>
+  <meta name="description" content="Dự báo nhu cầu hành khách và tối ưu lịch chạy tàu điện ngầm NYC." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/src/styles/tokens.css" />
+  <link rel="stylesheet" href="/src/styles/dashboard.css" />
+</head>
+<body class="dash-body">
+  <header class="dash-header">
+    <a class="dash-brand" href="./index.html">
+      <svg class="dash-brand-icon" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+        <circle cx="14" cy="14" r="13" stroke="currentColor" stroke-width="2" />
+        <circle cx="14" cy="14" r="5" fill="currentColor" />
+      </svg>
+      <span>MTA Optimizer</span>
+    </a>
+    <div class="dash-header-meta">
+      <span id="status-pill" class="status-pill status-pill--idle">Sẵn sàng</span>
+      <a class="dash-back" href="./index.html">← Về trang giới thiệu</a>
+    </div>
+  </header>
+
+  <main class="dash-main">
+    <!-- BẢNG CẤU HÌNH -->
+    <aside class="config-panel">
+      <h1 class="config-title">Tối ưu lịch trình</h1>
+      <p class="config-sub">Chọn tuyến, điều kiện vận hành rồi nhấn <strong>Chạy tối ưu</strong>.</p>
+
+      <form id="opt-form" class="opt-form">
+        <div class="field">
+          <label class="field-label" for="route">🚇 Tuyến tàu</label>
+          <select id="route" class="control"></select>
+        </div>
+
+        <div class="field">
+          <label class="field-label">📅 Nguồn dữ liệu</label>
+          <div class="seg" id="mode-seg">
+            <button type="button" class="seg-btn is-active" data-mode="scenario">Tự đặt kịch bản</button>
+            <button type="button" class="seg-btn" data-mode="date">Theo ngày thực tế</button>
+          </div>
+        </div>
+
+        <!-- Khối kịch bản -->
+        <div id="panel-scenario" class="subpanel">
+          <div class="field">
+            <label class="field-label">Loại ngày</label>
+            <div class="seg" id="daytype-seg">
+              <button type="button" class="seg-btn is-active" data-daytype="weekday">Ngày thường</button>
+              <button type="button" class="seg-btn" data-daytype="weekend">Cuối tuần</button>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label class="field-label" for="season">🗓️ Mùa</label>
+              <select id="season" class="control"></select>
+            </div>
+            <div class="field">
+              <label class="field-label" for="month">📅 Tháng (tùy chọn)</label>
+              <select id="month" class="control"></select>
+            </div>
+          </div>
+          <div class="field">
+            <label class="field-label" for="weather">🌤️ Thời tiết</label>
+            <select id="weather" class="control"></select>
+          </div>
+          <div class="field-row">
+            <label class="check"><input type="checkbox" id="is_holiday" /> 🏛️ Ngày lễ</label>
+            <label class="check"><input type="checkbox" id="is_event" /> 🎉 Sự kiện lớn</label>
+          </div>
+        </div>
+
+        <!-- Khối ngày thực tế -->
+        <div id="panel-date" class="subpanel" hidden>
+          <div class="field">
+            <label class="field-label" for="date">Ngày vận hành</label>
+            <input type="date" id="date" class="control" />
+            <p id="weather-summary" class="hint"></p>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label">⚖️ Mức ưu tiên — khoảng quét Pareto</label>
+          <div class="dual-range" id="w-dual">
+            <div class="dual-track"></div>
+            <div class="dual-fill" id="w-fill"></div>
+            <input type="range" id="w_low" class="dual-input" min="0" max="1" step="0.05" value="0.10" />
+            <input type="range" id="w_high" class="dual-input" min="0" max="1" step="0.05" value="0.90" />
+          </div>
+          <div class="range-line">
+            <span>Giảm thời gian chờ · <output id="wlow-out">0.10</output></span>
+            <span><output id="whigh-out">0.90</output> · Tiết kiệm chi phí</span>
+          </div>
+          <p class="hint">Hệ thống tự tìm điểm cân bằng tốt nhất trong khoảng này.</p>
+        </div>
+
+        <details class="advanced">
+          <summary>🔧 Tùy chọn nâng cao</summary>
+          <div class="adv-grid">
+            <label class="adv-field">Giãn cách tối thiểu (phút)<input type="number" id="min_headway_min" class="control" step="0.5" /></label>
+            <label class="adv-field">Giãn cách tối đa ban ngày<input type="number" id="max_headway_min" class="control" step="1" /></label>
+            <label class="adv-field">Giãn cách tối đa ban đêm<input type="number" id="overnight_max_headway_min" class="control" step="5" /></label>
+            <label class="adv-field">Sức chứa mỗi chuyến<input type="number" id="capacity_per_trip" class="control" step="100" /></label>
+            <label class="adv-field">Quá tải cho phép (%)<input type="number" id="max_overflow_pct" class="control" step="0.5" /></label>
+            <label class="adv-field">Thay đổi tối đa 2 giờ<input type="number" id="smoothness_delta" class="control" step="1" /></label>
+            <label class="adv-field">Số tàu tối đa (0 = ∞)<input type="number" id="route_fleet_limit" class="control" step="1" /></label>
+            <label class="adv-field">Chi phí mỗi giờ-tàu<input type="number" id="cost_per_vehicle_hour" class="control" step="10" /></label>
+            <label class="adv-field">Ban ngày – trần (×)<input type="number" id="trips_daytime_max_factor" class="control" min="0" step="0.01" /></label>
+            <label class="adv-field">Ban ngày – sàn (×)<input type="number" id="trips_min_factor" class="control" min="0" step="0.01" /></label>
+            <label class="adv-field">Ban đêm – trần (×)<input type="number" id="trips_overnight_max_factor" class="control" min="0" step="0.01" /></label>
+            <label class="adv-field">Ban đêm – sàn (×)<input type="number" id="trips_overnight_min_factor" class="control" min="0" step="0.01" /></label>
+            <label class="adv-field">Tỉ lệ vượt trần tối đa (%)<input type="number" id="max_over_ceiling_pct" class="control" step="5" /></label>
+          </div>
+          <div class="adv-checks">
+            <label class="check"><input type="checkbox" id="use_capacity_constraint" checked /> Bảo đảm đủ sức chứa</label>
+            <label class="check"><input type="checkbox" id="use_smoothness_constraint" checked /> Lịch mượt</label>
+            <label class="check"><input type="checkbox" id="use_route_fleet_cap" checked /> Giới hạn số tàu theo tuyến</label>
+          </div>
+        </details>
+
+        <button type="submit" id="run-btn" class="run-btn">🚀 Chạy tối ưu</button>
+        <p id="form-error" class="form-error" hidden></p>
+      </form>
+    </aside>
+
+    <!-- KẾT QUẢ -->
+    <section class="results">
+      <div id="empty-state" class="empty-state">
+        <div class="empty-icon">📊</div>
+        <h2>Chưa có kết quả</h2>
+        <p>Cấu hình bên trái rồi nhấn <strong>Chạy tối ưu</strong> để xem lịch trình, biểu đồ nhu cầu và đường cân bằng Pareto.</p>
+      </div>
+
+      <div id="results-body" class="results-body" hidden>
+        <div class="result-headline">
+          <h2 id="result-route">Tuyến —</h2>
+          <span id="result-sub" class="result-sub"></span>
+        </div>
+
+        <div id="kpis" class="kpi-grid"></div>
+
+        <div class="card">
+          <div class="card-head">
+            <h3>Lịch trình tối ưu theo giờ</h3>
+            <span id="over-note" class="card-note"></span>
+          </div>
+          <div class="table-wrap">
+            <table id="schedule-table" class="data-table">
+              <thead>
+                <tr>
+                  <th>Giờ</th><th>Hướng</th><th>Cầu (kh/giờ)</th><th>Số chuyến</th>
+                  <th>Lịch hiện tại</th><th>Chênh lệch</th><th>Giãn cách (phút)</th><th>Vượt trần</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="chart-grid">
+          <div class="card">
+            <div class="card-head"><h3>Nhu cầu vs sức chứa theo giờ</h3></div>
+            <canvas id="demand-chart" height="220"></canvas>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>Đường cân bằng Pareto</h3></div>
+            <canvas id="pareto-chart" height="220"></canvas>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>So sánh chi tiết với lịch hiện tại</h3></div>
+          <div class="table-wrap">
+            <table id="metric-table" class="data-table">
+              <thead><tr><th>Chỉ số</th><th>Tối ưu</th><th>Hiện tại</th><th>Cải thiện</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="loading" class="loading" hidden>
+        <div class="spinner"></div>
+        <p>Đang dự báo nhu cầu và tối ưu lịch trình…</p>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/src/optimizer/main.ts"></script>
+</body>
+</html>

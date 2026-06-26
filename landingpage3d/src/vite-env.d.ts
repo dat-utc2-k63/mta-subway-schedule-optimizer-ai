@@ -2,7 +2,8 @@
 
 interface ImportMetaEnv {
   readonly VITE_SPLINE_SCENE_URL: string;
-  readonly VITE_DASHBOARD_URL: string;
+  readonly VITE_DASHBOARD_URL?: string;
+  readonly VITE_API_BASE_URL?: string;
 }
 
 interface ImportMeta {

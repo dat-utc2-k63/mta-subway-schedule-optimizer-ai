@@ -39,7 +39,7 @@ VITE_SPLINE_SCENE_URL=https://prod.spline.design/your-scene/scene.splinecode
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `VITE_SPLINE_SCENE_URL` | `/spline-scene.splinecode` | Spline scene URL or local path |
-| `VITE_DASHBOARD_URL` | `/optimizer` | Optimizer dashboard (FastAPI route, separate from landing `/`) |
+| `VITE_DASHBOARD_URL` | `#` | Optional destination for CTA button |
 
 ## Architecture
 
@@ -64,4 +64,4 @@ Display only — clicking **Submit Feedback** shows a toast: *"Demo form — sub
 ## Related
 
 - 2D scroll landing: [`../landing/`](../landing/)
-- Optimizer dashboard (FastAPI): [`../api.py`](../api.py) → `/optimizer`
+- Optional CTA destination can be set with `VITE_DASHBOARD_URL`
